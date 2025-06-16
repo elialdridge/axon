@@ -1,3 +1,38 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+## Table of Contents
+
+- [Axon - AI-Driven Adventure Game](#axon---ai-driven-adventure-game)
+  - [Features](#features)
+    - [Core Gameplay](#core-gameplay)
+    - [Technical Features](#technical-features)
+  - [Architecture](#architecture)
+    - [AI Model Strategy](#ai-model-strategy)
+  - [Installation](#installation)
+    - [Prerequisites](#prerequisites)
+    - [Building from Source](#building-from-source)
+    - [Setting Up API Keys](#setting-up-api-keys)
+  - [Usage](#usage)
+    - [Starting Your Adventure](#starting-your-adventure)
+    - [Game Commands](#game-commands)
+    - [Navigation](#navigation)
+  - [Configuration](#configuration)
+    - [Save Files](#save-files)
+  - [Development](#development)
+    - [Technology Stack](#technology-stack)
+    - [Design Principles](#design-principles)
+    - [Running Tests](#running-tests)
+    - [Test Coverage](#test-coverage)
+    - [Project Structure](#project-structure)
+  - [Contributing](#contributing)
+  - [API Costs](#api-costs)
+  - [Troubleshooting](#troubleshooting)
+    - [Common Issues](#common-issues)
+    - [Error Messages](#error-messages)
+  - [License](#license)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # Axon - AI-Driven Adventure Game
 
 Axon is a player-driven, prompt-based adventure game where AI models serve as your world builder, storyteller, and dynamic rule-setter. Built entirely as a Terminal User Interface (TUI) using Go and Bubble Tea, Axon runs on virtually any operating system with a terminal.
