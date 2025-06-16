@@ -33,188 +33,87 @@ jobs:
     
     - uses: actions/configure-pages@v4
     
-    - name: Install pandoc
+    - name: Install mdBook
       run: |
-        sudo apt-get update
-        sudo apt-get install -y pandoc
+        curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.40/mdbook-v0.4.40-x86_64-unknown-linux-gnu.tar.gz | tar -xz
+        sudo mv mdbook /usr/local/bin/
     
-    - name: Create CSS template
+    - name: Setup mdBook project
       run: |
-        mkdir -p _site
-        cat > template.html << 'EOF'
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>$title$ - Axon</title>
-            <style>
-                body {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
-                    max-width: 900px;
-                    margin: 0 auto;
-                    padding: 2rem;
-                    line-height: 1.6;
-                    color: #24292f;
-                }
-                nav {
-                    background: #f6f8fa;
-                    padding: 1rem;
-                    margin: -2rem -2rem 2rem -2rem;
-                    border-bottom: 1px solid #d0d7de;
-                }
-                nav a {
-                    color: #0969da;
-                    text-decoration: none;
-                    margin-right: 1.5rem;
-                    font-weight: 500;
-                }
-                nav a:hover {
-                    text-decoration: underline;
-                }
-                h1, h2, h3, h4, h5, h6 {
-                    color: #1f2328;
-                    margin-top: 2rem;
-                    margin-bottom: 1rem;
-                }
-                h1 { border-bottom: 1px solid #d0d7de; padding-bottom: 0.3rem; }
-                h2 { border-bottom: 1px solid #d0d7de; padding-bottom: 0.3rem; }
-                pre {
-                    background: #f6f8fa;
-                    border: 1px solid #d0d7de;
-                    border-radius: 6px;
-                    padding: 16px;
-                    overflow-x: auto;
-                    font-size: 85%;
-                }
-                code {
-                    background: rgba(175,184,193,0.2);
-                    padding: 0.2em 0.4em;
-                    border-radius: 6px;
-                    font-size: 85%;
-                }
-                pre code {
-                    background: transparent;
-                    padding: 0;
-                }
-                blockquote {
-                    padding: 0 1em;
-                    color: #656d76;
-                    border-left: 0.25em solid #d0d7de;
-                    margin: 0;
-                }
-                table {
-                    border-collapse: collapse;
-                    width: 100%;
-                    margin: 1rem 0;
-                }
-                th, td {
-                    border: 1px solid #d0d7de;
-                    padding: 6px 13px;
-                    text-align: left;
-                }
-                th {
-                    background: #f6f8fa;
-                    font-weight: 600;
-                }
-                a {
-                    color: #0969da;
-                    text-decoration: none;
-                }
-                a:hover {
-                    text-decoration: underline;
-                }
-                img {
-                    max-width: 100%;
-                    height: auto;
-                }
-                .highlight {
-                    background: #fff8c5;
-                    padding: 0.2em 0.4em;
-                    border-radius: 3px;
-                }
-            </style>
-        </head>
-        <body>
-            <nav>
-                <a href="index.html">🏠 Home</a>
-                <a href="documentation.html">📚 Documentation</a>
-                <a href="contributing.html">🤝 Contributing</a>
-                <a href="api.html">⚡ API</a>
-            </nav>
-            <main>
-        $body$
-            </main>
-        </body>
-        </html>
+        # Initialize mdBook if not exists
+        if [[ ! -f "book.toml" ]]; then
+          mdbook init --force .
+        fi
+        
+        # Configure book.toml
+        cat > book.toml << 'EOF'
+        [book]
+        title = "Axon Documentation"
+        description = "Complete documentation for the Axon project"
+        authors = ["Axon Team"]
+        language = "en"
+        src = "docs"
+        
+        [output.html]
+        default-theme = "navy"
+        preferred-dark-theme = "navy"
+        git-repository-url = "https://github.com/elialdridge/axon"
+        edit-url-template = "https://github.com/elialdridge/axon/edit/main/{path}"
+        
+        [output.html.search]
+        enable = true
+        
+        [output.html.print]
+        enable = true
         EOF
-    
-    - name: Build documentation
-      run: |
-        # Convert markdown files using pandoc
-        for file in README.md DOCUMENTATION.md CONTRIBUTING.md; do
-          if [[ -f "$file" ]]; then
-            name=$(basename "$file" .md | tr '[:upper:]' '[:lower:]')
-            [[ "$name" == "readme" ]] && name="index"
-            
-            title=$(basename "$file" .md)
-            [[ "$title" == "README" ]] && title="Home"
-            
-            pandoc "$file" \
-              --from gfm \
-              --to html5 \
-              --template template.html \
-              --metadata title="$title" \
-              --highlight-style pygments \
-              --output "_site/${name}.html"
-          fi
-        done
+        
+        # Create docs directory structure
+        mkdir -p docs
+        
+        # Create SUMMARY.md for navigation
+        cat > docs/SUMMARY.md << 'EOF'
+        # Summary
+        
+        - [Introduction](./README.md)
+        - [Documentation](./DOCUMENTATION.md)
+        - [Contributing](./CONTRIBUTING.md)
+        - [API Reference](./api.md)
+        EOF
+        
+        # Copy existing markdown files to docs/
+        cp README.md docs/ 2>/dev/null || echo "# Axon\n\nWelcome to Axon documentation." > docs/README.md
+        cp DOCUMENTATION.md docs/ 2>/dev/null || echo "# Documentation\n\nDetailed documentation will be here." > docs/DOCUMENTATION.md
+        cp CONTRIBUTING.md docs/ 2>/dev/null || echo "# Contributing\n\nContribution guidelines will be here." > docs/CONTRIBUTING.md
     
     - name: Generate API documentation
       run: |
-        if go list ./... >/dev/null 2>&1; then
-          # Create API markdown first
-          cat > api.md << 'EOF'
-        # API Documentation
+        cat > docs/api.md << 'EOF'
+        # API Reference
         
-        This page contains the API documentation for all packages in the Axon project.
+        This page contains the complete API documentation for all packages in the Axon project.
         
         EOF
-          
+        
+        if go list ./... >/dev/null 2>&1; then
           for pkg in $(go list ./... 2>/dev/null); do
             pkg_name=$(basename "$pkg")
-            echo "## Package: $pkg_name" >> api.md
-            echo "" >> api.md
-            echo '```go' >> api.md
-            go doc "$pkg" 2>/dev/null >> api.md || echo "No documentation available for this package." >> api.md
-            echo '```' >> api.md
-            echo "" >> api.md
+            echo "## Package: \`$pkg_name\`" >> docs/api.md
+            echo "" >> docs/api.md
+            echo '```go' >> docs/api.md
+            go doc "$pkg" 2>/dev/null >> docs/api.md || echo "No documentation available for this package."
+            echo '```' >> docs/api.md
+            echo "" >> docs/api.md
           done
-          
-          # Convert API markdown to HTML using pandoc
-          pandoc api.md \
-            --from gfm \
-            --to html5 \
-            --template template.html \
-            --metadata title="API" \
-            --highlight-style pygments \
-            --output "_site/api.html"
-          
-          rm api.md
         else
-          # Fallback if no Go packages found
-          echo "# API Documentation\n\nNo Go packages found in this project." | \
-          pandoc \
-            --from gfm \
-            --to html5 \
-            --template template.html \
-            --metadata title="API" \
-            --output "_site/api.html"
+          echo "No Go packages found in this project." >> docs/api.md
         fi
+    
+    - name: Build with mdBook
+      run: mdbook build
     
     - uses: actions/upload-pages-artifact@v3
       with:
-        path: _site
+        path: book
     
     - id: deployment
       uses: actions/deploy-pages@v4
