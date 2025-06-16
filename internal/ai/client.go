@@ -94,7 +94,12 @@ func (c *Client) generateOpenRouter(req Request) (*Response, error) {
 	if err != nil {
 		return &Response{Error: err}, nil
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			// Log error but don't fail the request
+			fmt.Printf("Warning: failed to close response body: %v\n", err)
+		}
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
