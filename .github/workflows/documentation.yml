@@ -128,7 +128,6 @@ jobs:
         labels: |
           documentation
           automated
-
   validate-examples:
     name: Validate Code Examples
     runs-on: ubuntu-latest
