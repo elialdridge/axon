@@ -33,89 +33,183 @@ jobs:
     
     - uses: actions/configure-pages@v4
     
-    - name: Build docs
+    - name: Install pandoc
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y pandoc
+    
+    - name: Create CSS template
       run: |
         mkdir -p _site
-        
-        # Copy markdown files as HTML
+        cat > template.html << 'EOF'
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>$title$ - Axon</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+                    max-width: 900px;
+                    margin: 0 auto;
+                    padding: 2rem;
+                    line-height: 1.6;
+                    color: #24292f;
+                }
+                nav {
+                    background: #f6f8fa;
+                    padding: 1rem;
+                    margin: -2rem -2rem 2rem -2rem;
+                    border-bottom: 1px solid #d0d7de;
+                }
+                nav a {
+                    color: #0969da;
+                    text-decoration: none;
+                    margin-right: 1.5rem;
+                    font-weight: 500;
+                }
+                nav a:hover {
+                    text-decoration: underline;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    color: #1f2328;
+                    margin-top: 2rem;
+                    margin-bottom: 1rem;
+                }
+                h1 { border-bottom: 1px solid #d0d7de; padding-bottom: 0.3rem; }
+                h2 { border-bottom: 1px solid #d0d7de; padding-bottom: 0.3rem; }
+                pre {
+                    background: #f6f8fa;
+                    border: 1px solid #d0d7de;
+                    border-radius: 6px;
+                    padding: 16px;
+                    overflow-x: auto;
+                    font-size: 85%;
+                }
+                code {
+                    background: rgba(175,184,193,0.2);
+                    padding: 0.2em 0.4em;
+                    border-radius: 6px;
+                    font-size: 85%;
+                }
+                pre code {
+                    background: transparent;
+                    padding: 0;
+                }
+                blockquote {
+                    padding: 0 1em;
+                    color: #656d76;
+                    border-left: 0.25em solid #d0d7de;
+                    margin: 0;
+                }
+                table {
+                    border-collapse: collapse;
+                    width: 100%;
+                    margin: 1rem 0;
+                }
+                th, td {
+                    border: 1px solid #d0d7de;
+                    padding: 6px 13px;
+                    text-align: left;
+                }
+                th {
+                    background: #f6f8fa;
+                    font-weight: 600;
+                }
+                a {
+                    color: #0969da;
+                    text-decoration: none;
+                }
+                a:hover {
+                    text-decoration: underline;
+                }
+                img {
+                    max-width: 100%;
+                    height: auto;
+                }
+                .highlight {
+                    background: #fff8c5;
+                    padding: 0.2em 0.4em;
+                    border-radius: 3px;
+                }
+            </style>
+        </head>
+        <body>
+            <nav>
+                <a href="index.html">🏠 Home</a>
+                <a href="documentation.html">📚 Documentation</a>
+                <a href="contributing.html">🤝 Contributing</a>
+                <a href="api.html">⚡ API</a>
+            </nav>
+            <main>
+        $body$
+            </main>
+        </body>
+        </html>
+        EOF
+    
+    - name: Build documentation
+      run: |
+        # Convert markdown files using pandoc
         for file in README.md DOCUMENTATION.md CONTRIBUTING.md; do
           if [[ -f "$file" ]]; then
             name=$(basename "$file" .md | tr '[:upper:]' '[:lower:]')
             [[ "$name" == "readme" ]] && name="index"
             
-            cat > "_site/${name}.html" << EOF
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>$(basename "$file" .md) - Axon</title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
-                pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; }
-                code { background: #f6f8fa; padding: 0.2rem 0.4rem; border-radius: 3px; }
-                h1, h2, h3 { color: #24292f; }
-                a { color: #0969da; }
-                nav { margin-bottom: 2rem; padding: 1rem 0; border-bottom: 1px solid #d1d9e0; }
-                nav a { margin-right: 1rem; text-decoration: none; }
-            </style>
-        </head>
-        <body>
-            <nav>
-                <a href="index.html">Home</a>
-                <a href="documentation.html">Documentation</a>
-                <a href="contributing.html">Contributing</a>
-                <a href="api.html">API</a>
-            </nav>
-            <main>
-        EOF
+            title=$(basename "$file" .md)
+            [[ "$title" == "README" ]] && title="Home"
             
-            # Convert markdown to basic HTML
-            sed 's/^# /\n<h1>/; s/^## /\n<h2>/; s/^### /\n<h3>/; 
-                 s/^\* /\n<li>/; s/^- /\n<li>/;
-                 s/\[\([^]]*\)\](\([^)]*\))/<a href="\2">\1<\/a>/g;
-                 s/`\([^`]*\)`/<code>\1<\/code>/g' "$file" >> "_site/${name}.html"
-            
-            echo "\n</main>\n</body>\n</html>" >> "_site/${name}.html"
+            pandoc "$file" \
+              --from gfm \
+              --to html5 \
+              --template template.html \
+              --metadata title="$title" \
+              --highlight-style github \
+              --output "_site/${name}.html"
           fi
         done
-        
-        # Generate API documentation
+    
+    - name: Generate API documentation
+      run: |
         if go list ./... >/dev/null 2>&1; then
-          cat > _site/api.html << 'EOF'
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>API Documentation - Axon</title>
-            <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
-                pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; }
-                h1, h2, h3 { color: #24292f; }
-                nav { margin-bottom: 2rem; padding: 1rem 0; border-bottom: 1px solid #d1d9e0; }
-                nav a { margin-right: 1rem; text-decoration: none; }
-            </style>
-        </head>
-        <body>
-            <nav>
-                <a href="index.html">Home</a>
-                <a href="documentation.html">Documentation</a>
-                <a href="contributing.html">Contributing</a>
-                <a href="api.html">API</a>
-            </nav>
-            <main>
-                <h1>API Documentation</h1>
+          # Create API markdown first
+          cat > api.md << 'EOF'
+        # API Documentation
+        
+        This page contains the API documentation for all packages in the Axon project.
+        
         EOF
           
           for pkg in $(go list ./... 2>/dev/null); do
-            echo "<h2>Package: $(basename $pkg)</h2>" >> _site/api.html
-            echo "<pre>" >> _site/api.html
-            go doc "$pkg" 2>/dev/null | sed 's/</\&lt;/g; s/>/\&gt;/g' >> _site/api.html || echo "No documentation available" >> _site/api.html
-            echo "</pre>" >> _site/api.html
+            pkg_name=$(basename "$pkg")
+            echo "## Package: $pkg_name" >> api.md
+            echo "" >> api.md
+            echo '```go' >> api.md
+            go doc "$pkg" 2>/dev/null >> api.md || echo "No documentation available for this package." >> api.md
+            echo '```' >> api.md
+            echo "" >> api.md
           done
           
-          echo "</main></body></html>" >> _site/api.html
+          # Convert API markdown to HTML using pandoc
+          pandoc api.md \
+            --from gfm \
+            --to html5 \
+            --template template.html \
+            --metadata title="API" \
+            --highlight-style github \
+            --output "_site/api.html"
+          
+          rm api.md
+        else
+          # Fallback if no Go packages found
+          echo "# API Documentation\n\nNo Go packages found in this project." | \
+          pandoc \
+            --from gfm \
+            --to html5 \
+            --template template.html \
+            --metadata title="API" \
+            --output "_site/api.html"
         fi
     
     - uses: actions/upload-pages-artifact@v3
