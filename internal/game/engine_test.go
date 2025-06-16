@@ -84,7 +84,9 @@ func TestProcessPlayerAction(t *testing.T) {
 	state := NewGameState()
 
 	// Initialize world first
-	engine.InitializeWorld(state, "test world")
+	if err := engine.InitializeWorld(state, "test world"); err != nil {
+		t.Fatal(err)
+	}
 	initialHistoryCount := len(state.History)
 	initialTurn := state.Turn
 
@@ -275,6 +277,7 @@ func TestGenerateActionSuggestions(t *testing.T) {
 	for i, expected := range expectedSuggestions {
 		if i < len(suggestions) && suggestions[i] != expected {
 			// This is okay - might be AI suggestions or fallback
+			t.Logf("Suggestion %d: expected %s, got %s", i, expected, suggestions[i])
 		}
 	}
 }

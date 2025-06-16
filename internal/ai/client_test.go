@@ -101,7 +101,9 @@ func TestOpenRouterAPICall(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"choices":[{"message":{"content":"Test response"}}]}`))
+		if _, err := w.Write([]byte(`{"choices":[{"message":{"content":"Test response"}}]}`)); err != nil {
+			t.Errorf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 

@@ -206,12 +206,20 @@ func TestListSaves(t *testing.T) {
 
 	// Create some save files
 	state := &TestGameState{Name: "Test", Level: 1, CreatedAt: time.Now()}
-	storage.SaveGame("save1", state)
-	storage.SaveGame("save2", state)
-	storage.SaveGame("save3", state)
+	if err := storage.SaveGame("save1", state); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.SaveGame("save2", state); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.SaveGame("save3", state); err != nil {
+		t.Fatal(err)
+	}
 
 	// Create a non-save file (should be ignored)
-	os.WriteFile(filepath.Join(tempDir, "not_a_save.txt"), []byte("test"), 0644)
+	if err := os.WriteFile(filepath.Join(tempDir, "not_a_save.txt"), []byte("test"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	// List saves
 	saves, err = storage.ListSaves()
