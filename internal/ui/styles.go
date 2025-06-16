@@ -24,52 +24,51 @@ func NewStyles() *Styles {
 		Base: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#000000")),
-		
+
 		HistoryPanel: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#000000")).
 			Padding(0, 1),
-		
+
 		InputPanel: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#000000")).
 			Border(lipgloss.NormalBorder(), true, false, false, false).
 			BorderForeground(lipgloss.Color("#FFFFFF")).
 			Padding(0, 1),
-		
+
 		PlayerText: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#000000")).
 			Bold(true),
-		
+
 		NarratorText: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#000000")),
-		
+
 		SystemText: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#000000")).
 			Italic(true),
-		
+
 		InventoryText: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#000000")).
 			Faint(true),
-		
+
 		Border: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#000000")).
 			Border(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.Color("#FFFFFF")),
-		
+
 		Prompt: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#000000")).
 			Bold(true),
-		
+
 		Scrollbar: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFFFFF")).
 			Background(lipgloss.Color("#000000")),
 	}
 }
-

@@ -18,8 +18,8 @@ type Config struct {
 
 // TerminalConfig contains terminal-specific settings
 type TerminalConfig struct {
-	Width  int  `json:"width"`
-	Height int  `json:"height"`
+	Width        int  `json:"width"`
+	Height       int  `json:"height"`
 	ColorEnabled bool `json:"color_enabled"`
 }
 
@@ -39,7 +39,7 @@ type GameConfig struct {
 // Load loads configuration from file or creates default
 func Load() *Config {
 	cfg := defaultConfig()
-	
+
 	// Try to load from config file
 	configPath := getConfigPath()
 	if data, err := os.ReadFile(configPath); err == nil {
@@ -47,7 +47,7 @@ func Load() *Config {
 			return cfg
 		}
 	}
-	
+
 	return cfg
 }
 
@@ -55,17 +55,17 @@ func Load() *Config {
 func (c *Config) Save() error {
 	configPath := getConfigPath()
 	configDir := filepath.Dir(configPath)
-	
+
 	// Create config directory if it doesn't exist
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return err
 	}
-	
+
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(configPath, data, 0644)
 }
 
@@ -73,11 +73,11 @@ func (c *Config) Save() error {
 func defaultConfig() *Config {
 	homeDir, _ := os.UserHomeDir()
 	saveDir := filepath.Join(homeDir, ".axon", "saves")
-	
+
 	return &Config{
 		Terminal: TerminalConfig{
-			Width:  80,
-			Height: 24,
+			Width:        80,
+			Height:       24,
 			ColorEnabled: false, // Monochrome by default
 		},
 		AI: AIConfig{
@@ -97,4 +97,3 @@ func getConfigPath() string {
 	homeDir, _ := os.UserHomeDir()
 	return filepath.Join(homeDir, ".axon", "config.json")
 }
-

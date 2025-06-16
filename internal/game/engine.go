@@ -27,7 +27,7 @@ func NewEngine(cfg *config.Config) *Engine {
 func (e *Engine) InitializeWorld(state *GameState, seedPrompt string) error {
 	// Use the best model for world building
 	model := e.aiClient.GetBestModel("world_building")
-	
+
 	// Create context for world generation
 	context := []string{
 		"You are a master world builder for a text-based adventure game.",
@@ -35,21 +35,21 @@ func (e *Engine) InitializeWorld(state *GameState, seedPrompt string) error {
 		"Respond with JSON in this format:",
 		`{"name": "World Name", "description": "Detailed description", "setting": "Genre/Setting", "rules": ["rule1", "rule2"], "starting_location": "location name", "starting_location_desc": "description"}`,
 	}
-	
+
 	prompt := fmt.Sprintf("Create a world for this scenario: %s", seedPrompt)
-	
+
 	req := ai.Request{
 		Prompt:    prompt,
 		Model:     model,
 		MaxTokens: 1000,
 		Context:   context,
 	}
-	
+
 	resp, err := e.aiClient.Generate(req)
 	if err != nil {
 		return fmt.Errorf("failed to generate world: %w", err)
 	}
-	
+
 	if resp.Error != nil {
 		// Fallback to basic world creation
 		state.World.Name = "Unknown Realm"
@@ -69,7 +69,7 @@ func (e *Engine) InitializeWorld(state *GameState, seedPrompt string) error {
 		state.World.Locations["Starting Point"] = resp.Text
 		state.AddHistoryEntry("narrator", resp.Text)
 	}
-	
+
 	return nil
 }
 
@@ -77,19 +77,19 @@ func (e *Engine) InitializeWorld(state *GameState, seedPrompt string) error {
 func (e *Engine) ProcessPlayerAction(state *GameState, action string) error {
 	// Add player action to history
 	state.AddHistoryEntry("player", action)
-	
+
 	// Get recent history for context
 	recentHistory := state.GetRecentHistory(10)
 	contextLines := make([]string, 0)
-	
+
 	// Build context from recent history
 	for _, entry := range recentHistory {
 		contextLines = append(contextLines, fmt.Sprintf("%s: %s", entry.Type, entry.Content))
 	}
-	
+
 	// Choose appropriate model based on action type
 	var model string
-	
+
 	actionLower := strings.ToLower(action)
 	switch {
 	case strings.Contains(actionLower, "say") || strings.Contains(actionLower, "talk") || strings.Contains(actionLower, "speak"):
@@ -99,7 +99,7 @@ func (e *Engine) ProcessPlayerAction(state *GameState, action string) error {
 	default:
 		model = e.aiClient.GetBestModel("storytelling")
 	}
-	
+
 	// Create AI request
 	context := []string{
 		"You are the Game Master for a text-based adventure game.",
@@ -110,21 +110,21 @@ func (e *Engine) ProcessPlayerAction(state *GameState, action string) error {
 		strings.Join(contextLines, "\n"),
 		"Respond to the player's action with narrative description. Keep responses concise but engaging.",
 	}
-	
+
 	prompt := fmt.Sprintf("Player action: %s", action)
-	
+
 	req := ai.Request{
 		Prompt:    prompt,
 		Model:     model,
 		MaxTokens: 500,
 		Context:   context,
 	}
-	
+
 	resp, err := e.aiClient.Generate(req)
 	if err != nil {
 		return fmt.Errorf("failed to generate response: %w", err)
 	}
-	
+
 	if resp.Error != nil {
 		// Fallback response
 		state.AddHistoryEntry("narrator", "Something happens in response to your action.")
@@ -132,17 +132,17 @@ func (e *Engine) ProcessPlayerAction(state *GameState, action string) error {
 	} else {
 		state.AddHistoryEntry("narrator", resp.Text)
 	}
-	
+
 	// Advance turn
 	state.NextTurn()
-	
+
 	return nil
 }
 
 // handleSystemAction handles system actions like inventory, stats, etc.
 func (e *Engine) handleSystemAction(state *GameState, action string) error {
 	actionLower := strings.ToLower(action)
-	
+
 	switch {
 	case strings.Contains(actionLower, "inventory"):
 		if len(state.Player.Inventory) == 0 {
@@ -154,7 +154,7 @@ func (e *Engine) handleSystemAction(state *GameState, action string) error {
 			}
 			state.AddHistoryEntry("system", inventoryList)
 		}
-	
+
 	case strings.Contains(actionLower, "stats"):
 		if len(state.Player.Stats) == 0 {
 			state.AddHistoryEntry("system", "No stats to display.")
@@ -165,7 +165,7 @@ func (e *Engine) handleSystemAction(state *GameState, action string) error {
 			}
 			state.AddHistoryEntry("system", statsList)
 		}
-	
+
 	case strings.Contains(actionLower, "help"):
 		helpText := `Available commands:
 - Type any action to interact with the world
@@ -175,25 +175,25 @@ func (e *Engine) handleSystemAction(state *GameState, action string) error {
 - 'load [name]' to load a saved game
 - 'quit' to exit the game`
 		state.AddHistoryEntry("system", helpText)
-	
+
 	default:
 		state.AddHistoryEntry("system", "Unknown system command. Type 'help' for available commands.")
 	}
-	
+
 	return nil
 }
 
 // GenerateActionSuggestions generates suggested actions for the player
 func (e *Engine) GenerateActionSuggestions(state *GameState) ([]string, error) {
 	model := e.aiClient.GetBestModel("rule_setting")
-	
+
 	context := []string{
 		"Generate 3-4 brief action suggestions for the player in this situation.",
 		fmt.Sprintf("World: %s", state.World.Name),
 		fmt.Sprintf("Location: %s", state.World.CurrentLocation),
 		"Provide only the action suggestions, one per line, without numbers or bullets.",
 	}
-	
+
 	// Get recent context
 	recentHistory := state.GetRecentHistory(3)
 	contextLines := make([]string, 0)
@@ -202,31 +202,31 @@ func (e *Engine) GenerateActionSuggestions(state *GameState) ([]string, error) {
 			contextLines = append(contextLines, entry.Content)
 		}
 	}
-	
+
 	prompt := "Current situation: " + strings.Join(contextLines, " ")
-	
+
 	req := ai.Request{
 		Prompt:    prompt,
 		Model:     model,
 		MaxTokens: 200,
 		Context:   context,
 	}
-	
+
 	resp, err := e.aiClient.Generate(req)
 	if err != nil {
 		return []string{"Look around", "Continue forward", "Check inventory"}, nil
 	}
-	
+
 	if resp.Error != nil {
 		return []string{"Look around", "Continue forward", "Check inventory"}, nil
 	}
-	
+
 	// Parse suggestions from response
 	suggestions := strings.Split(strings.TrimSpace(resp.Text), "\n")
 	if len(suggestions) == 0 {
 		return []string{"Look around", "Continue forward", "Check inventory"}, nil
 	}
-	
+
 	// Clean up suggestions
 	cleanSuggestions := make([]string, 0)
 	for _, suggestion := range suggestions {
@@ -235,7 +235,6 @@ func (e *Engine) GenerateActionSuggestions(state *GameState) ([]string, error) {
 			cleanSuggestions = append(cleanSuggestions, clean)
 		}
 	}
-	
+
 	return cleanSuggestions, nil
 }
-

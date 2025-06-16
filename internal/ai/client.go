@@ -127,7 +127,7 @@ func (c *Client) generateOpenRouter(req Request) (*Response, error) {
 // generateGemini generates content using Gemini API (placeholder implementation)
 func (c *Client) generateGemini(req Request) (*Response, error) {
 	if c.geminiKey == "" {
-		return &Response{Error: fmt.Errorf("Gemini API key not configured")}, nil
+		return &Response{Error: fmt.Errorf("gemini API key not configured")}, nil
 	}
 
 	// This is a simplified implementation - in practice you'd use the actual Gemini API
@@ -151,4 +151,3 @@ func (c *Client) GetBestModel(task string) string {
 		return "openai/gpt-4o-mini"
 	}
 }
-

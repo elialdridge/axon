@@ -21,21 +21,21 @@ type GameState struct {
 
 // World represents the game world
 type World struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Setting     string            `json:"setting"`
-	Rules       []string          `json:"rules"`
-	Locations   map[string]string `json:"locations"`
-	CurrentLocation string        `json:"current_location"`
+	Name            string            `json:"name"`
+	Description     string            `json:"description"`
+	Setting         string            `json:"setting"`
+	Rules           []string          `json:"rules"`
+	Locations       map[string]string `json:"locations"`
+	CurrentLocation string            `json:"current_location"`
 }
 
 // Player represents the player character
 type Player struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Inventory   []Item            `json:"inventory"`
-	Stats       map[string]int    `json:"stats"`
-	Status      string            `json:"status"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Inventory   []Item         `json:"inventory"`
+	Stats       map[string]int `json:"stats"`
+	Status      string         `json:"status"`
 }
 
 // Item represents an inventory item
@@ -96,4 +96,3 @@ func (gs *GameState) NextTurn() {
 	gs.Turn++
 	gs.UpdatedAt = time.Now()
 }
-

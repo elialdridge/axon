@@ -117,6 +117,10 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// Add character to input
 		if len(msg.String()) == 1 {
 			m.inputValue += msg.String()
+			// Clear error message when user starts typing
+			if m.errorMessage != "" {
+				m.errorMessage = ""
+			}
 		}
 		return m, nil
 	}
@@ -285,7 +289,6 @@ Enter your choice: %s`,
 
 	if m.errorMessage != "" {
 		menu += "\n\n" + m.styles.SystemText.Render("Error: "+m.errorMessage)
-		m.errorMessage = ""
 	}
 
 	return m.styles.Base.Width(m.width).Height(m.height).Render(menu)
@@ -314,7 +317,6 @@ Your world: %s`,
 
 	if m.errorMessage != "" {
 		setup += "\n\n" + m.styles.SystemText.Render("Error: "+m.errorMessage)
-		m.errorMessage = ""
 	}
 
 	return m.styles.Base.Width(m.width).Height(m.height).Render(setup)
@@ -396,7 +398,6 @@ func (m Model) renderInput() string {
 
 	if m.errorMessage != "" {
 		content.WriteString("\n" + m.styles.SystemText.Render("Error: "+m.errorMessage))
-		m.errorMessage = ""
 	}
 
 	// Show action suggestions
@@ -422,4 +423,3 @@ func (m Model) renderSaveLoad() string {
 	content += "\nPress 'q' to return to main menu"
 	return m.styles.Base.Width(m.width).Height(m.height).Render(content)
 }
-

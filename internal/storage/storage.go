@@ -33,7 +33,7 @@ func (s *Storage) SaveGame(name string, state interface{}) error {
 	}
 
 	filePath := filepath.Join(s.saveDir, name+".json")
-	
+
 	// Marshal game state to JSON
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
@@ -51,7 +51,7 @@ func (s *Storage) SaveGame(name string, state interface{}) error {
 // LoadGame loads a game state from disk into the provided state interface
 func (s *Storage) LoadGame(name string, state interface{}) error {
 	filePath := filepath.Join(s.saveDir, name+".json")
-	
+
 	// Check if file exists
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return fmt.Errorf("save file not found: %s", name)
@@ -97,4 +97,3 @@ func (s *Storage) DeleteSave(name string) error {
 	filePath := filepath.Join(s.saveDir, name+".json")
 	return os.Remove(filePath)
 }
-

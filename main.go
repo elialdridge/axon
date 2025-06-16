@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"axon/internal/game"
 	"axon/internal/config"
+	"axon/internal/game"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {
@@ -24,4 +25,3 @@ func main() {
 		os.Exit(1)
 	}
 }
-
