@@ -48,23 +48,36 @@ jobs:
         # Configure book.toml
         cat > book.toml << 'EOF'
         [book]
-        title = "Axon Documentation"
-        description = "Complete documentation for the Axon project"
+        title = "Axon"
+        description = "AI-powered text adventure in your terminal"
         authors = ["Axon Team"]
         language = "en"
         src = "docs"
         
         [output.html]
-        default-theme = "navy"
+        default-theme = "light"
         preferred-dark-theme = "navy"
         git-repository-url = "https://github.com/elialdridge/axon"
         edit-url-template = "https://github.com/elialdridge/axon/edit/main/{path}"
+        mathjax-support = false
+        copy-fonts = false
         
         [output.html.search]
         enable = true
+        limit-results = 30
+        teaser-word-count = 30
+        use-boolean-and = true
+        boost-title = 2
+        boost-hierarchy = 1
+        boost-paragraph = 1
         
         [output.html.print]
         enable = true
+        page-break = false
+        
+        [output.html.fold]
+        enable = false
+        level = 0
         EOF
         
         # Create docs directory structure
@@ -74,10 +87,17 @@ jobs:
         cat > docs/SUMMARY.md << 'EOF'
         # Summary
         
-        - [Introduction](./README.md)
+        [Introduction](./README.md)
+        
+        # Guide
+        
         - [Documentation](./DOCUMENTATION.md)
         - [Contributing](./CONTRIBUTING.md)
-        - [API Reference](./api.md)
+        
+        # Reference
+        
+        - [API](./api.md)
+        - [CLI](./cli.md)
         EOF
         
         # Copy existing markdown files to docs/
@@ -85,28 +105,126 @@ jobs:
         cp DOCUMENTATION.md docs/ 2>/dev/null || echo "# Documentation\n\nDetailed documentation will be here." > docs/DOCUMENTATION.md
         cp CONTRIBUTING.md docs/ 2>/dev/null || echo "# Contributing\n\nContribution guidelines will be here." > docs/CONTRIBUTING.md
     
-    - name: Generate API documentation
+    - name: Generate API and CLI documentation
       run: |
+        # Generate API documentation
         cat > docs/api.md << 'EOF'
         # API Reference
         
-        This page contains the complete API documentation for all packages in the Axon project.
+        Complete API documentation for all Axon packages.
         
         EOF
         
         if go list ./... >/dev/null 2>&1; then
           for pkg in $(go list ./... 2>/dev/null); do
             pkg_name=$(basename "$pkg")
-            echo "## Package: \`$pkg_name\`" >> docs/api.md
+            echo "## \`$pkg_name\`" >> docs/api.md
             echo "" >> docs/api.md
             echo '```go' >> docs/api.md
-            go doc "$pkg" 2>/dev/null >> docs/api.md || echo "No documentation available for this package."
+            go doc "$pkg" 2>/dev/null >> docs/api.md || echo "No documentation available."
             echo '```' >> docs/api.md
             echo "" >> docs/api.md
           done
         else
-          echo "No Go packages found in this project." >> docs/api.md
+          echo "No Go packages found." >> docs/api.md
         fi
+        
+        # Generate CLI documentation
+        cat > docs/cli.md << 'EOF'
+        # Command Line Interface
+        
+        ## Installation
+        
+        ```bash
+        git clone <repository-url>
+        cd axon
+        go build -o axon .
+        ```
+        
+        ## Usage
+        
+        ```bash
+        # Start the game
+        ./axon
+        
+        # With API key
+        OPENROUTER_API_KEY=your_key ./axon
+        ```
+        
+        ## Configuration
+        
+        Config file: `~/.axon/config.json`
+        
+        ```json
+        {
+          "ai": {
+            "openrouter_key": "your_key",
+            "gemini_key": "your_key"
+          },
+          "game": {
+            "auto_save": true,
+            "save_interval": 30
+          },
+          "terminal": {
+            "monochrome": true
+          }
+        }
+        ```
+        
+        ## Environment Variables
+        
+        | Variable | Description |
+        |----------|-------------|
+        | `OPENROUTER_API_KEY` | OpenRouter API key |
+        | `GEMINI_API_KEY` | Gemini API key |
+        | `AXON_CONFIG_DIR` | Custom config directory |
+        EOF
+    
+    - name: Create custom CSS for ultra-minimal theme
+      run: |
+        mkdir -p theme
+        cat > theme/css/general.css << 'EOF'
+        /* Ultra-minimal theme */
+        * { box-sizing: border-box; }
+        
+        html { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { margin: 0; color: #333; background: #fff; line-height: 1.6; }
+        
+        .sidebar { background: #fafafa; border-right: 1px solid #eee; }
+        .sidebar .chapter li.part-title { color: #666; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 5px 0; }
+        .sidebar .chapter li a { color: #333; text-decoration: none; padding: 2px 0; }
+        .sidebar .chapter li a:hover { color: #0066cc; }
+        .sidebar .chapter li a.active { color: #0066cc; font-weight: 500; }
+        
+        .content { max-width: 750px; margin: 0; padding: 20px 40px; }
+        .menu-title { font-size: 16px; font-weight: 600; margin: 0; }
+        
+        h1, h2, h3, h4, h5, h6 { color: #222; margin: 30px 0 15px 0; font-weight: 600; }
+        h1 { font-size: 28px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        h2 { font-size: 22px; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px; }
+        h3 { font-size: 18px; }
+        
+        p { margin: 15px 0; }
+        
+        pre { background: #f8f8f8; border: 1px solid #e8e8e8; border-radius: 3px; padding: 15px; overflow-x: auto; font-size: 14px; }
+        code { background: #f0f0f0; padding: 2px 4px; border-radius: 2px; font-size: 14px; }
+        pre code { background: transparent; padding: 0; }
+        
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+        th { background: #f8f8f8; font-weight: 600; }
+        
+        blockquote { border-left: 3px solid #ddd; margin: 20px 0; padding: 0 20px; color: #666; }
+        
+        .nav-chapters { display: none; }
+        .mobile-nav-chapters { display: none; }
+        
+        @media (max-width: 768px) {
+          .content { padding: 15px 20px; }
+          h1 { font-size: 24px; }
+          h2 { font-size: 20px; }
+        }
+        EOF
     
     - name: Build with mdBook
       run: mdbook build
