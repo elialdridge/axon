@@ -2,163 +2,126 @@ name: Documentation
 
 on:
   push:
-    branches: [ main, master ]
-    paths:
-      - '**.md'
-      - '**.go'
-      - '.github/workflows/documentation.yml'
+    branches: [main]
+    paths: ['**.md', '**.go']
   pull_request:
-    branches: [ main, master ]
-    paths:
-      - '**.md'
-      - '**.go'
-  schedule:
-    # Run weekly on Sundays at 6 AM UTC
-    - cron: '0 6 * * 0'
+    branches: [main]
+    paths: ['**.md', '**.go']
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
   pages: write
   id-token: write
 
 jobs:
-  check-spelling:
-    name: Check Spelling
+  docs:
+    name: Build and Deploy Documentation
     runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Simple spell check
-      run: |
-        echo "Checking spelling in documentation..."
-        find . -name '*.md' -exec grep -i "recieve\|seperate\|teh\|hte\|wich" {} + || true
-        echo "Basic spelling check completed."
-      continue-on-error: true
-
-  lint-docs:
-    name: Lint Documentation
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Check documentation files exist
-      run: |
-        echo "Checking documentation files..."
-        ls -la *.md || true
-        echo "Documentation check completed."
-
-  validate-examples:
-    name: Validate Code Examples
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Check code examples
-      run: |
-        echo "Checking code examples in documentation..."
-        find . -name '*.md' -exec grep -l '```' {} \; | while read file; do
-          echo "Found code blocks in $file"
-        done
-        echo "Code examples check completed."
-
-  generate-docs:
-    name: Generate Documentation
-    runs-on: ubuntu-latest
-    needs: [lint-docs, check-spelling]
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
-    
-    - name: Install bc for calculations
-      run: sudo apt-get update && sudo apt-get install -y bc
-    
-    - name: Update documentation metrics
-      run: |
-        # Count lines of documentation
-        DOC_LINES=$(find . -name '*.md' -not -path './.git/*' -exec wc -l {} + | tail -1 | awk '{print $1}' || echo "0")
-        CODE_LINES=$(find . -name '*.go' -not -path './.git/*' -exec wc -l {} + | tail -1 | awk '{print $1}' || echo "1")
-        
-        # Calculate documentation ratio (avoid division by zero)
-        if [ "$CODE_LINES" -gt 0 ]; then
-          DOC_RATIO=$(echo "scale=2; $DOC_LINES / $CODE_LINES * 100" | bc -l)
-        else
-          DOC_RATIO="0.00"
-        fi
-        
-        echo "Documentation lines: $DOC_LINES"
-        echo "Code lines: $CODE_LINES"
-        echo "Documentation ratio: ${DOC_RATIO}%"
-
-  deploy-docs:
-    name: Deploy Documentation
-    runs-on: ubuntu-latest
-    needs: [generate-docs, validate-examples]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
     
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
     
-    - name: Setup Pages
-      uses: actions/configure-pages@v4
-      with:
-        enablement: true
-    
-    - name: Set up Go
-      uses: actions/setup-go@v5
+    - uses: actions/setup-go@v5
       with:
         go-version: '1.23'
     
-    - name: Install dependencies
-      run: |
-        npm install -g markdown-to-html-cli || echo "Warning: markdown-to-html-cli installation failed"
+    - uses: actions/configure-pages@v4
     
-    - name: Build documentation site
+    - name: Build docs
       run: |
         mkdir -p _site
         
-        # Simple HTML conversion
-        if command -v markdown-to-html &> /dev/null; then
-          markdown-to-html --source README.md --output _site/index.html || cp README.md _site/index.html
-          markdown-to-html --source DOCUMENTATION.md --output _site/documentation.html || cp DOCUMENTATION.md _site/documentation.html
-          markdown-to-html --source CONTRIBUTING.md --output _site/contributing.html || cp CONTRIBUTING.md _site/contributing.html
-        else
-          # Fallback: create simple HTML files
-          echo "<html><head><title>Axon</title></head><body><h1>Axon</h1><pre>$(cat README.md)</pre></body></html>" > _site/index.html
-          echo "<html><head><title>Documentation</title></head><body><h1>Documentation</h1><pre>$(cat DOCUMENTATION.md)</pre></body></html>" > _site/documentation.html
-          echo "<html><head><title>Contributing</title></head><body><h1>Contributing</h1><pre>$(cat CONTRIBUTING.md)</pre></body></html>" > _site/contributing.html
-        fi
+        # Copy markdown files as HTML
+        for file in README.md DOCUMENTATION.md CONTRIBUTING.md; do
+          if [[ -f "$file" ]]; then
+            name=$(basename "$file" .md | tr '[:upper:]' '[:lower:]')
+            [[ "$name" == "readme" ]] && name="index"
+            
+            cat > "_site/${name}.html" << EOF
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>$(basename "$file" .md) - Axon</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+                pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+                code { background: #f6f8fa; padding: 0.2rem 0.4rem; border-radius: 3px; }
+                h1, h2, h3 { color: #24292f; }
+                a { color: #0969da; }
+                nav { margin-bottom: 2rem; padding: 1rem 0; border-bottom: 1px solid #d1d9e0; }
+                nav a { margin-right: 1rem; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <nav>
+                <a href="index.html">Home</a>
+                <a href="documentation.html">Documentation</a>
+                <a href="contributing.html">Contributing</a>
+                <a href="api.html">API</a>
+            </nav>
+            <main>
+        EOF
+            
+            # Convert markdown to basic HTML
+            sed 's/^# /\n<h1>/; s/^## /\n<h2>/; s/^### /\n<h3>/; 
+                 s/^\* /\n<li>/; s/^- /\n<li>/;
+                 s/\[\([^]]*\)\](\([^)]*\))/<a href="\2">\1<\/a>/g;
+                 s/`\([^`]*\)`/<code>\1<\/code>/g' "$file" >> "_site/${name}.html"
+            
+            echo "\n</main>\n</body>\n</html>" >> "_site/${name}.html"
+          fi
+        done
         
-        # Create simple API docs
-        mkdir -p _site/api
-        echo "<html><head><title>API Documentation</title></head><body><h1>Axon API Documentation</h1><p>API documentation will be available here.</p></body></html>" > _site/api/index.html
+        # Generate API documentation
+        if go list ./... >/dev/null 2>&1; then
+          cat > _site/api.html << 'EOF'
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>API Documentation - Axon</title>
+            <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+                pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+                h1, h2, h3 { color: #24292f; }
+                nav { margin-bottom: 2rem; padding: 1rem 0; border-bottom: 1px solid #d1d9e0; }
+                nav a { margin-right: 1rem; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <nav>
+                <a href="index.html">Home</a>
+                <a href="documentation.html">Documentation</a>
+                <a href="contributing.html">Contributing</a>
+                <a href="api.html">API</a>
+            </nav>
+            <main>
+                <h1>API Documentation</h1>
+        EOF
+          
+          for pkg in $(go list ./... 2>/dev/null); do
+            echo "<h2>Package: $(basename $pkg)</h2>" >> _site/api.html
+            echo "<pre>" >> _site/api.html
+            go doc "$pkg" 2>/dev/null | sed 's/</\&lt;/g; s/>/\&gt;/g' >> _site/api.html || echo "No documentation available" >> _site/api.html
+            echo "</pre>" >> _site/api.html
+          done
+          
+          echo "</main></body></html>" >> _site/api.html
+        fi
     
-    - name: Upload artifact
-      uses: actions/upload-pages-artifact@v3
+    - uses: actions/upload-pages-artifact@v3
       with:
-        path: '_site'
+        path: _site
     
-    - name: Deploy to GitHub Pages
-      id: deployment
+    - id: deployment
       uses: actions/deploy-pages@v4
 
