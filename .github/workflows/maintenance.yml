@@ -266,7 +266,7 @@ jobs:
           console.log(healthReport);
     
     - name: Upload health report
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: repository-health-report
         path: /tmp/health-report.md
