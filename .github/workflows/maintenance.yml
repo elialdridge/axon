@@ -1,0 +1,315 @@
+name: Repository Maintenance
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  cleanup-artifacts:
+    name: Cleanup Old Artifacts
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Delete old artifacts
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: artifacts } = await github.rest.actions.listArtifactsForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            per_page: 100
+          });
+          
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - 30); // Keep artifacts for 30 days
+          
+          for (const artifact of artifacts.artifacts) {
+            const createdAt = new Date(artifact.created_at);
+            if (createdAt < cutoffDate) {
+              console.log(`Deleting artifact: ${artifact.name} (${artifact.id})`);
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id
+              });
+            }
+          }
+
+  cleanup-caches:
+    name: Cleanup Old Caches
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Delete old caches
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: caches } = await github.rest.actions.getActionsCacheList({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            per_page: 100
+          });
+          
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - 7); // Keep caches for 7 days
+          
+          for (const cache of caches.actions_caches) {
+            const createdAt = new Date(cache.created_at);
+            if (createdAt < cutoffDate) {
+              console.log(`Deleting cache: ${cache.key} (${cache.id})`);
+              await github.rest.actions.deleteActionsCacheById({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                cache_id: cache.id
+              });
+            }
+          }
+
+  update-labels:
+    name: Update Repository Labels
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Update labels
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const labels = [
+            { name: 'bug', color: 'd73a4a', description: 'Something isn\'t working' },
+            { name: 'enhancement', color: 'a2eeef', description: 'New feature or request' },
+            { name: 'question', color: 'd876e3', description: 'Further information is requested' },
+            { name: 'documentation', color: '0075ca', description: 'Improvements or additions to documentation' },
+            { name: 'good first issue', color: '7057ff', description: 'Good for newcomers' },
+            { name: 'help wanted', color: '008672', description: 'Extra attention is needed' },
+            { name: 'dependencies', color: '0366d6', description: 'Pull requests that update a dependency file' },
+            { name: 'security', color: 'b60205', description: 'Security related issue' },
+            { name: 'vulnerability', color: 'b60205', description: 'Security vulnerability' },
+            { name: 'high-priority', color: 'e99695', description: 'High priority issue' },
+            { name: 'needs-triage', color: 'fbca04', description: 'Needs investigation' },
+            { name: 'needs-response', color: 'fbca04', description: 'Waiting for response' },
+            { name: 'needs-revision', color: 'fbca04', description: 'Needs changes' },
+            { name: 'work-in-progress', color: 'f9d0c4', description: 'Work in progress' },
+            { name: 'ready-for-review', color: '0e8a16', description: 'Ready for review' },
+            { name: 'automated', color: '006b75', description: 'Automated by bot' },
+            { name: 'keep-open', color: 'c2e0c6', description: 'Should not be closed by stale bot' },
+            { name: 'stale', color: 'ededed', description: 'No recent activity' }
+          ];
+          
+          for (const label of labels) {
+            try {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: label.name,
+                color: label.color,
+                description: label.description
+              });
+              console.log(`Created label: ${label.name}`);
+            } catch (error) {
+              if (error.status === 422) {
+                // Label already exists, update it
+                await github.rest.issues.updateLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name: label.name,
+                  color: label.color,
+                  description: label.description
+                });
+                console.log(`Updated label: ${label.name}`);
+              } else {
+                console.error(`Error with label ${label.name}:`, error);
+              }
+            }
+          }
+
+  update-milestones:
+    name: Update Milestones
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Create/update milestones
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const milestones = [
+            {
+              title: 'v1.1.0',
+              description: 'Next minor release with new features',
+              due_on: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // 90 days from now
+            },
+            {
+              title: 'v1.0.1',
+              description: 'Bug fixes and minor improvements',
+              due_on: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 days from now
+            },
+            {
+              title: 'Future',
+              description: 'Future enhancements and ideas',
+              due_on: null
+            }
+          ];
+          
+          const { data: existingMilestones } = await github.rest.issues.listMilestones({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open'
+          });
+          
+          for (const milestone of milestones) {
+            const existing = existingMilestones.find(m => m.title === milestone.title);
+            
+            if (!existing) {
+              await github.rest.issues.createMilestone({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: milestone.title,
+                description: milestone.description,
+                due_on: milestone.due_on
+              });
+              console.log(`Created milestone: ${milestone.title}`);
+            } else {
+              await github.rest.issues.updateMilestone({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                milestone_number: existing.number,
+                title: milestone.title,
+                description: milestone.description,
+                due_on: milestone.due_on
+              });
+              console.log(`Updated milestone: ${milestone.title}`);
+            }
+          }
+
+  check-repository-health:
+    name: Check Repository Health
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Analyze repository health
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+          
+          // Check for required files
+          const requiredFiles = [
+            'README.md',
+            'LICENSE',
+            'CONTRIBUTING.md',
+            'SECURITY.md',
+            '.gitignore',
+            'go.mod'
+          ];
+          
+          const missingFiles = [];
+          for (const file of requiredFiles) {
+            if (!fs.existsSync(file)) {
+              missingFiles.push(file);
+            }
+          }
+          
+          // Check for workflow files
+          const workflowDir = '.github/workflows';
+          let workflowCount = 0;
+          if (fs.existsSync(workflowDir)) {
+            workflowCount = fs.readdirSync(workflowDir).filter(f => f.endsWith('.yml')).length;
+          }
+          
+          // Generate health report
+          let healthReport = '# Repository Health Report\n\n';
+          
+          if (missingFiles.length === 0) {
+            healthReport += '✅ All required files are present\n\n';
+          } else {
+            healthReport += `❌ Missing files: ${missingFiles.join(', ')}\n\n`;
+          }
+          
+          healthReport += `📊 Workflow files: ${workflowCount}\n\n`;
+          
+          // Check recent activity
+          const { data: commits } = await github.rest.repos.listCommits({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() // Last 30 days
+          });
+          
+          healthReport += `📈 Commits in last 30 days: ${commits.length}\n\n`;
+          
+          // Check open issues and PRs
+          const { data: openIssues } = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            per_page: 100
+          });
+          
+          const issues = openIssues.filter(i => !i.pull_request);
+          const prs = openIssues.filter(i => i.pull_request);
+          
+          healthReport += `📋 Open issues: ${issues.length}\n`;
+          healthReport += `🔄 Open pull requests: ${prs.length}\n\n`;
+          
+          // Save report
+          fs.writeFileSync('/tmp/health-report.md', healthReport);
+          console.log(healthReport);
+    
+    - name: Upload health report
+      uses: actions/upload-artifact@v3
+      with:
+        name: repository-health-report
+        path: /tmp/health-report.md
+        retention-days: 7
+
+  auto-merge-dependabot:
+    name: Auto-merge Dependabot PRs
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    
+    steps:
+    - name: Auto-merge Dependabot PRs
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: prs } = await github.rest.pulls.list({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open'
+          });
+          
+          for (const pr of prs) {
+            if (pr.user.login === 'dependabot[bot]') {
+              // Check if CI is passing
+              const { data: checks } = await github.rest.checks.listForRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: pr.head.sha
+              });
+              
+              const allChecksPass = checks.check_runs.every(check => 
+                check.status === 'completed' && check.conclusion === 'success'
+              );
+              
+              if (allChecksPass) {
+                await github.rest.pulls.merge({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
+                  merge_method: 'squash'
+                });
+                console.log(`Auto-merged Dependabot PR #${pr.number}`);
+              }
+            }
+          }
+

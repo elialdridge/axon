@@ -19,6 +19,24 @@ updates:
     labels:
       - "dependencies"
       - "go"
+      - "automated"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    groups:
+      test-dependencies:
+        patterns:
+          - "github.com/stretchr/testify"
+          - "github.com/golang/mock"
+        update-types:
+          - "minor"
+          - "patch"
+      ui-dependencies:
+        patterns:
+          - "github.com/charmbracelet/*"
+        update-types:
+          - "minor"
+          - "patch"
     
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
@@ -39,6 +57,14 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+      - "automated"
+    groups:
+      actions:
+        patterns:
+          - "actions/*"
+        update-types:
+          - "minor"
+          - "patch"
     
   # Enable version updates for Docker
   - package-ecosystem: "docker"
@@ -59,4 +85,5 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+      - "automated"
 

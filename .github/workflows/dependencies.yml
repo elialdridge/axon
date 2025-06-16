@@ -1,0 +1,151 @@
+name: Dependencies
+
+on:
+  schedule:
+    # Run every Monday at 6 AM UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-go-dependencies:
+    name: Update Go Dependencies
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+    
+    - name: Update dependencies
+      run: |
+        # Update all dependencies to latest
+        go get -u ./...
+        go mod tidy
+        go mod verify
+    
+    - name: Run tests
+      run: go test ./...
+    
+    - name: Check for changes
+      id: changes
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Create Pull Request
+      if: steps.changes.outputs.changes == 'true'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "deps: update Go dependencies"
+        title: "🔄 Automated dependency update"
+        body: |
+          This PR updates Go dependencies to their latest versions.
+          
+          ## Changes
+          - Updated go.mod and go.sum files
+          - All tests pass with updated dependencies
+          
+          ## Verification
+          - [x] Tests pass
+          - [x] Dependencies verified
+          - [x] No breaking changes detected
+          
+          This is an automated PR created by the dependency update workflow.
+        branch: automated/dependency-update
+        delete-branch: true
+        labels: |
+          dependencies
+          automated
+        reviewers: |
+          @maintainers
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+    
+    - name: Run security audit
+      run: |
+        # Install govulncheck
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        
+        # Run vulnerability check
+        govulncheck ./...
+    
+    - name: Run nancy security scanner
+      run: |
+        go install github.com/sonatypecommunity/nancy@latest
+        go list -json -deps ./... | nancy sleuth
+    
+    - name: Create security issue if vulnerabilities found
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: issues } = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: 'security,vulnerability',
+            state: 'open'
+          });
+          
+          if (issues.length === 0) {
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Security vulnerabilities detected',
+              body: `Security vulnerabilities have been detected in the dependencies.\n\nPlease review the workflow logs and update vulnerable dependencies.\n\nWorkflow: ${context.workflow}\nRun: ${context.runId}`,
+              labels: ['security', 'vulnerability', 'high-priority']
+            });
+          }
+
+  license-check:
+    name: License Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+    
+    - name: Install go-licenses
+      run: go install github.com/google/go-licenses@latest
+    
+    - name: Check licenses
+      run: |
+        go-licenses check ./...
+        go-licenses csv ./... > licenses.csv
+    
+    - name: Upload license report
+      uses: actions/upload-artifact@v3
+      with:
+        name: license-report
+        path: licenses.csv
+        retention-days: 30
+

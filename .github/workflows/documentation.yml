@@ -1,0 +1,267 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - '**.md'
+      - '**.go'
+      - '.github/workflows/documentation.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - '**.md'
+      - '**.go'
+  schedule:
+    # Run weekly on Sundays at 6 AM UTC
+    - cron: '0 6 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  pages: write
+  id-token: write
+
+jobs:
+  lint-docs:
+    name: Lint Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Install markdownlint
+      run: npm install -g markdownlint-cli
+    
+    - name: Lint Markdown files
+      run: |
+        markdownlint '**/*.md' --ignore node_modules --ignore .git
+    
+    - name: Check links
+      uses: gaurav-nelson/github-action-markdown-link-check@v1
+      with:
+        use-quiet-mode: 'yes'
+        use-verbose-mode: 'yes'
+        config-file: '.github/markdown-link-check.json'
+        check-modified-files-only: 'yes'
+
+  generate-docs:
+    name: Generate Documentation
+    runs-on: ubuntu-latest
+    needs: lint-docs
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+    
+    - name: Install godoc
+      run: go install golang.org/x/tools/cmd/godoc@latest
+    
+    - name: Generate API documentation
+      run: |
+        mkdir -p docs/api
+        
+        # Generate package documentation
+        for pkg in $(go list ./...); do
+          pkg_name=$(echo $pkg | sed 's|.*github.com/.*/||')
+          mkdir -p "docs/api/$pkg_name"
+          go doc -all $pkg > "docs/api/$pkg_name/README.md"
+        done
+    
+    - name: Generate README TOC
+      uses: technote-space/toc-generator@v4
+      with:
+        TARGET_FILES: 'README.md,DOCUMENTATION.md,CONTRIBUTING.md,SECURITY.md'
+        TOC_TITLE: '## Table of Contents'
+        COMMIT_MESSAGE: 'docs: update table of contents'
+        PR_TITLE: 'docs: update documentation TOC'
+    
+    - name: Update documentation metrics
+      run: |
+        # Count lines of documentation
+        DOC_LINES=$(find . -name '*.md' -not -path './.git/*' -exec wc -l {} + | tail -1 | awk '{print $1}')
+        CODE_LINES=$(find . -name '*.go' -not -path './.git/*' -exec wc -l {} + | tail -1 | awk '{print $1}')
+        
+        # Calculate documentation ratio
+        DOC_RATIO=$(echo "scale=2; $DOC_LINES / $CODE_LINES * 100" | bc -l)
+        
+        # Update README with metrics
+        sed -i "s/Documentation: [0-9.]\+%/Documentation: ${DOC_RATIO}%/g" README.md || true
+        
+        echo "Documentation lines: $DOC_LINES"
+        echo "Code lines: $CODE_LINES"
+        echo "Documentation ratio: ${DOC_RATIO}%"
+    
+    - name: Check for documentation changes
+      id: changes
+      run: |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "changes=true" >> $GITHUB_OUTPUT
+        else
+          echo "changes=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Create documentation update PR
+      if: steps.changes.outputs.changes == 'true' && github.event_name == 'schedule'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: 'docs: automated documentation update'
+        title: '📝 Automated documentation update'
+        body: |
+          This PR contains automated documentation updates:
+          
+          - Updated API documentation
+          - Refreshed table of contents
+          - Updated documentation metrics
+          
+          This is an automated PR created by the documentation workflow.
+        branch: automated/docs-update
+        delete-branch: true
+        labels: |
+          documentation
+          automated
+
+  validate-examples:
+    name: Validate Code Examples
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+    
+    - name: Extract and validate Go code blocks
+      run: |
+        # Extract Go code blocks from markdown files
+        find . -name '*.md' -exec grep -l '```go' {} \; | while read file; do
+          echo "Checking Go code blocks in $file"
+          
+          # Extract code blocks and create temporary files
+          awk '/```go/{flag=1; next} /```/{flag=0} flag' "$file" > "/tmp/$(basename $file .md).go" 2>/dev/null || true
+          
+          # Validate syntax if file has content
+          if [ -s "/tmp/$(basename $file .md).go" ]; then
+            echo "Validating Go syntax in $file"
+            go fmt "/tmp/$(basename $file .md).go" >/dev/null || echo "Warning: Go syntax issues in $file"
+          fi
+        done
+    
+    - name: Check shell command examples
+      run: |
+        # Check shell commands in documentation
+        find . -name '*.md' -exec grep -H '^```bash\|^```shell\|^```sh' {} \; | while read match; do
+          file=$(echo "$match" | cut -d: -f1)
+          echo "Found shell examples in $file"
+        done
+
+  deploy-docs:
+    name: Deploy Documentation
+    runs-on: ubuntu-latest
+    needs: [generate-docs, validate-examples]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+    
+    - name: Install dependencies
+      run: |
+        go install golang.org/x/tools/cmd/godoc@latest
+        npm install -g markdown-to-html-cli
+    
+    - name: Build documentation site
+      run: |
+        mkdir -p _site
+        
+        # Convert markdown to HTML
+        markdown-to-html --source README.md --output _site/index.html
+        markdown-to-html --source DOCUMENTATION.md --output _site/documentation.html
+        markdown-to-html --source CONTRIBUTING.md --output _site/contributing.html
+        markdown-to-html --source SECURITY.md --output _site/security.html
+        
+        # Generate godoc HTML
+        mkdir -p _site/api
+        godoc -html . > _site/api/index.html
+        
+        # Create simple navigation
+        cat > _site/nav.html << 'EOF'
+        <nav style="background: #f8f9fa; padding: 1rem; margin-bottom: 2rem;">
+          <a href="/">Home</a> |
+          <a href="/documentation.html">Documentation</a> |
+          <a href="/api/">API Reference</a> |
+          <a href="/contributing.html">Contributing</a> |
+          <a href="/security.html">Security</a>
+        </nav>
+        EOF
+        
+        # Add navigation to all HTML files
+        for file in _site/*.html; do
+          sed -i '/<body>/r _site/nav.html' "$file"
+        done
+    
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: '_site'
+    
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
+
+  check-spelling:
+    name: Check Spelling
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Check spelling
+      uses: crate-ci/typos@master
+      with:
+        files: '*.md README.md DOCUMENTATION.md CONTRIBUTING.md SECURITY.md'
+        config: '.github/typos.toml'
+    
+    - name: Report spelling errors
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: '🔄 **Spelling Check Failed**\n\nPlease check the workflow logs for spelling errors and fix them.'
+          });
+

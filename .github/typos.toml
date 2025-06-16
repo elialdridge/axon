@@ -1,0 +1,56 @@
+[default]
+# Configuration for typos spell checker
+
+[default.extend-words]
+# Add project-specific terms that should not be flagged as typos
+axon = "axon"
+ai = "ai"
+api = "api"
+tui = "tui"
+cli = "cli"
+github = "github"
+golang = "golang"
+openrouter = "openrouter"
+gemini = "gemini"
+bubbletea = "bubbletea"
+lipgloss = "lipgloss"
+cyberpunk = "cyberpunk"
+scifi = "scifi"
+rpg = "rpg"
+npc = "npc"
+gameplay = "gameplay"
+storytelling = "storytelling"
+worldbuilding = "worldbuilding"
+
+[default.extend-identifiers]
+# Add code identifiers that should not be flagged
+ctx = "ctx"
+err = "err"
+fmt = "fmt"
+stdlib = "stdlib"
+sync = "sync"
+http = "http"
+json = "json"
+struct = "struct"
+func = "func"
+interface = "interface"
+
+[files]
+extend-exclude = [
+    "*.go",        # Skip Go source files
+    "*.json",      # Skip JSON files
+    "*.yml",       # Skip YAML files
+    "*.yaml",      # Skip YAML files
+    "go.mod",      # Skip Go module file
+    "go.sum",      # Skip Go sum file
+    ".git/**",     # Skip git directory
+    "vendor/**",   # Skip vendor directory
+    "node_modules/**", # Skip node modules
+    "*.log",       # Skip log files
+]
+
+[type.go]
+extend-exclude = [
+    "internal/**",  # Skip internal Go packages for now
+]
+

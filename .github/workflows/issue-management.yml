@@ -1,0 +1,256 @@
+name: Issue Management
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled]
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [opened, edited, labeled, unlabeled, synchronize]
+  pull_request_review:
+    types: [submitted]
+  schedule:
+    # Run daily at 8 AM UTC for stale issue cleanup
+    - cron: '0 8 * * *'
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  auto-label:
+    name: Auto Label Issues
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && github.event.action == 'opened'
+    
+    steps:
+    - name: Auto-label bug reports
+      if: contains(github.event.issue.title, '[BUG]')
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.issues.addLabels({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            labels: ['bug', 'needs-triage']
+          });
+    
+    - name: Auto-label feature requests
+      if: contains(github.event.issue.title, '[FEATURE]')
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.issues.addLabels({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            labels: ['enhancement', 'needs-triage']
+          });
+    
+    - name: Auto-label questions
+      if: contains(github.event.issue.title, '[QUESTION]')
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.issues.addLabels({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            labels: ['question', 'needs-response']
+          });
+    
+    - name: Welcome new contributors
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { data: issues } = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            creator: context.payload.issue.user.login,
+            state: 'all'
+          });
+          
+          if (issues.length === 1) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `👋 Welcome to Axon! Thank you for your first issue.\n\nA maintainer will review this issue soon. In the meantime, please:\n- Make sure you've filled out the issue template completely\n- Check our [documentation](README.md) and [contributing guidelines](CONTRIBUTING.md)\n- Join our community discussions\n\nWe appreciate your contribution! 🎉`
+            });
+          }
+
+  auto-assign:
+    name: Auto Assign Issues
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && github.event.action == 'labeled'
+    
+    steps:
+    - name: Assign security issues
+      if: contains(github.event.label.name, 'security')
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.issues.addAssignees({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            assignees: ['@security-team'] // Replace with actual usernames
+          });
+    
+    - name: Set priority labels
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const issue = context.payload.issue;
+          const labels = issue.labels.map(l => l.name);
+          
+          if (labels.includes('security') || labels.includes('vulnerability')) {
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['high-priority']
+            });
+          }
+
+  stale-issues:
+    name: Close Stale Issues
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    steps:
+    - name: Close stale issues and PRs
+      uses: actions/stale@v8
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        stale-issue-message: |
+          This issue has been automatically marked as stale because it has not had any activity for 60 days.
+          
+          If this issue is still relevant, please:
+          - Add a comment to keep it open
+          - Update the issue with current information
+          - Add the `keep-open` label
+          
+          This issue will be closed in 7 days if no further activity occurs.
+        stale-pr-message: |
+          This pull request has been automatically marked as stale because it has not had any activity for 30 days.
+          
+          If this PR is still relevant, please:
+          - Rebase and update the PR
+          - Add a comment explaining the current status
+          - Request a review from maintainers
+          
+          This PR will be closed in 7 days if no further activity occurs.
+        close-issue-message: |
+          This issue has been automatically closed due to inactivity.
+          
+          If you believe this issue is still relevant, please reopen it with updated information.
+        close-pr-message: |
+          This pull request has been automatically closed due to inactivity.
+          
+          If you would like to continue with this PR, please reopen it and update it with the latest changes.
+        days-before-stale: 60
+        days-before-close: 7
+        days-before-pr-stale: 30
+        days-before-pr-close: 7
+        stale-issue-label: 'stale'
+        stale-pr-label: 'stale'
+        exempt-issue-labels: 'keep-open,security,high-priority'
+        exempt-pr-labels: 'keep-open,security,high-priority'
+
+  pr-checks:
+    name: PR Automated Checks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Check PR title format
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const title = context.payload.pull_request.title;
+          const conventionalCommitRegex = /^(feat|fix|docs|style|refactor|perf|test|chore|ci|build)(\(.+\))?!?: .+/;
+          
+          if (!conventionalCommitRegex.test(title)) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `❌ **PR Title Format Check Failed**\n\nPlease format your PR title using [Conventional Commits](https://www.conventionalcommits.org/):\n\n\`feat: add new feature\`\n\`fix: resolve bug in game engine\`\n\`docs: update API documentation\`\n\nThis helps us maintain a clean git history and generate changelogs automatically.`
+            });
+            
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['needs-revision']
+            });
+          } else {
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              name: 'needs-revision'
+            }).catch(() => {}); // Ignore if label doesn't exist
+          }
+    
+    - name: Check if PR is ready for review
+      if: github.event.action == 'opened' || github.event.action == 'synchronize'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const pr = context.payload.pull_request;
+          
+          if (pr.draft) {
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['work-in-progress']
+            });
+          } else {
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              name: 'work-in-progress'
+            }).catch(() => {}); // Ignore if label doesn't exist
+            
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['ready-for-review']
+            });
+          }
+
+  auto-merge:
+    name: Auto Merge Dependabot PRs
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'pull_request' &&
+      github.actor == 'dependabot[bot]' &&
+      github.event.action == 'opened'
+    
+    steps:
+    - name: Enable auto-merge for Dependabot PRs
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.pulls.createReview({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.payload.pull_request.number,
+            event: 'APPROVE',
+            body: 'Auto-approving Dependabot PR after successful CI checks.'
+          });
+          
+          await github.rest.pulls.merge({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.payload.pull_request.number,
+            merge_method: 'squash'
+          });
+
