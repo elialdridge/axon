@@ -24,6 +24,21 @@ permissions:
   id-token: write
 
 jobs:
+  check-spelling:
+    name: Check Spelling
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Simple spell check
+      run: |
+        echo "Checking spelling in documentation..."
+        find . -name '*.md' -exec grep -i "recieve\|seperate\|teh\|hte\|wich" {} + || true
+        echo "Basic spelling check completed."
+      continue-on-error: true
+
   lint-docs:
     name: Lint Documentation
     runs-on: ubuntu-latest
@@ -38,10 +53,26 @@ jobs:
         ls -la *.md || true
         echo "Documentation check completed."
 
+  validate-examples:
+    name: Validate Code Examples
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Check code examples
+      run: |
+        echo "Checking code examples in documentation..."
+        find . -name '*.md' -exec grep -l '```' {} \; | while read file; do
+          echo "Found code blocks in $file"
+        done
+        echo "Code examples check completed."
+
   generate-docs:
     name: Generate Documentation
     runs-on: ubuntu-latest
-    needs: lint-docs
+    needs: [lint-docs, check-spelling]
     
     steps:
     - name: Checkout code
@@ -53,28 +84,6 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.23'
-    
-    - name: Install godoc
-      run: go install golang.org/x/tools/cmd/godoc@latest
-    
-    - name: Generate API documentation
-      run: |
-        mkdir -p docs/api
-        
-        # Generate package documentation
-        for pkg in $(go list ./...); do
-          pkg_name=$(echo $pkg | sed 's|.*github.com/.*/||')
-          mkdir -p "docs/api/$pkg_name"
-          go doc -all $pkg > "docs/api/$pkg_name/README.md"
-        done
-    
-    - name: Generate README TOC
-      uses: technote-space/toc-generator@v4
-      with:
-        TARGET_PATHS: 'README.md,DOCUMENTATION.md,CONTRIBUTING.md'
-        TOC_TITLE: '## Table of Contents'
-        COMMIT_MESSAGE: 'docs: update table of contents'
-        PR_TITLE: 'docs: update documentation TOC'
     
     - name: Install bc for calculations
       run: sudo apt-get update && sudo apt-get install -y bc
@@ -92,57 +101,9 @@ jobs:
           DOC_RATIO="0.00"
         fi
         
-        # Update README with metrics
-        sed -i "s/Documentation: [0-9.]\+%/Documentation: ${DOC_RATIO}%/g" README.md || true
-        
         echo "Documentation lines: $DOC_LINES"
         echo "Code lines: $CODE_LINES"
         echo "Documentation ratio: ${DOC_RATIO}%"
-    
-    - name: Check for documentation changes
-      id: changes
-      run: |
-        if [ -n "$(git status --porcelain)" ]; then
-          echo "changes=true" >> $GITHUB_OUTPUT
-        else
-          echo "changes=false" >> $GITHUB_OUTPUT
-        fi
-    
-    - name: Create documentation update PR
-      if: steps.changes.outputs.changes == 'true' && github.event_name == 'schedule'
-      uses: peter-evans/create-pull-request@v5
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        commit-message: 'docs: automated documentation update'
-        title: '📝 Automated documentation update'
-        body: |
-          This PR contains automated documentation updates:
-          
-          - Updated API documentation
-          - Refreshed table of contents
-          - Updated documentation metrics
-          
-          This is an automated PR created by the documentation workflow.
-        branch: automated/docs-update
-        delete-branch: true
-        labels: |
-          documentation
-          automated
-  validate-examples:
-    name: Validate Code Examples
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Check code examples
-      run: |
-        echo "Checking code examples in documentation..."
-        find . -name '*.md' -exec grep -l '```' {} \; | while read file; do
-          echo "Found code blocks in $file"
-        done
-        echo "Code examples check completed."
 
   deploy-docs:
     name: Deploy Documentation
@@ -170,76 +131,27 @@ jobs:
     
     - name: Install dependencies
       run: |
-        go install golang.org/x/tools/cmd/godoc@latest
         npm install -g markdown-to-html-cli || echo "Warning: markdown-to-html-cli installation failed"
     
     - name: Build documentation site
       run: |
         mkdir -p _site
         
-        # Simple fallback HTML generation if markdown-to-html-cli is not available
+        # Simple HTML conversion
         if command -v markdown-to-html &> /dev/null; then
-          # Convert markdown to HTML using markdown-to-html-cli
           markdown-to-html --source README.md --output _site/index.html || cp README.md _site/index.html
           markdown-to-html --source DOCUMENTATION.md --output _site/documentation.html || cp DOCUMENTATION.md _site/documentation.html
           markdown-to-html --source CONTRIBUTING.md --output _site/contributing.html || cp CONTRIBUTING.md _site/contributing.html
         else
-          # Fallback: copy markdown files as-is
-          cp README.md _site/index.html
-          cp DOCUMENTATION.md _site/documentation.html
-          cp CONTRIBUTING.md _site/contributing.html
+          # Fallback: create simple HTML files
+          echo "<html><head><title>Axon</title></head><body><h1>Axon</h1><pre>$(cat README.md)</pre></body></html>" > _site/index.html
+          echo "<html><head><title>Documentation</title></head><body><h1>Documentation</h1><pre>$(cat DOCUMENTATION.md)</pre></body></html>" > _site/documentation.html
+          echo "<html><head><title>Contributing</title></head><body><h1>Contributing</h1><pre>$(cat CONTRIBUTING.md)</pre></body></html>" > _site/contributing.html
         fi
         
-        # Generate API documentation using go doc
+        # Create simple API docs
         mkdir -p _site/api
-        cat > _site/api/index.html << 'EOF'
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Axon API Documentation</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
-        h1, h2, h3 { color: #333; }
-    </style>
-</head>
-<body>
-    <h1>Axon API Documentation</h1>
-EOF
-        
-        # Generate documentation for each package
-        for pkg in $(go list ./... 2>/dev/null || echo "."); do
-          pkg_name=$(echo $pkg | sed 's|.*github.com/.*/||' | sed 's|\./||')
-          if [ "$pkg_name" = "." ]; then pkg_name="main"; fi
-          
-          echo "<h2>Package: $pkg_name</h2>" >> _site/api/index.html
-          echo "<pre>" >> _site/api/index.html
-          go doc $pkg 2>/dev/null | sed 's/</\&lt;/g; s/>/\&gt;/g' >> _site/api/index.html || echo "Package documentation not available" >> _site/api/index.html
-          echo "</pre>" >> _site/api/index.html
-        done
-        
-        echo "</body></html>" >> _site/api/index.html
-        
-        # Create simple navigation
-        cat > _site/nav.html << 'EOF'
-        <nav style="background: #f8f9fa; padding: 1rem; margin-bottom: 2rem;">
-          <a href="./index.html">Home</a> |
-          <a href="./documentation.html">Documentation</a> |
-          <a href="./api/index.html">API Reference</a> |
-          <a href="./contributing.html">Contributing</a>
-        </nav>
-        EOF
-        
-        # Create a simple index.html if it doesn't exist
-        if [ ! -f _site/index.html ]; then
-          cat > _site/index.html << 'EOF'
-        <!DOCTYPE html>
-        <html><head><title>Axon Documentation</title></head><body>
-        <h1>Axon Documentation</h1>
-        <p>Welcome to the Axon project documentation.</p>
-        </body></html>
-        EOF
-        fi
+        echo "<html><head><title>API Documentation</title></head><body><h1>Axon API Documentation</h1><p>API documentation will be available here.</p></body></html>" > _site/api/index.html
     
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
@@ -249,20 +161,4 @@ EOF
     - name: Deploy to GitHub Pages
       id: deployment
       uses: actions/deploy-pages@v4
-
-  check-spelling:
-    name: Check Spelling
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Simple spell check
-      run: |
-        echo "Checking spelling in documentation..."
-        # Check for common typos manually
-        find . -name '*.md' -exec grep -i "recieve\|seperate\|teh\|hte\|wich" {} + || true
-        echo "Basic spelling check completed."
-      continue-on-error: true
 
