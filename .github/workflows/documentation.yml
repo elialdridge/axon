@@ -165,7 +165,7 @@ jobs:
               --to html5 \
               --template template.html \
               --metadata title="$title" \
-              --highlight-style github \
+              --highlight-style pygments \
               --output "_site/${name}.html"
           fi
         done
@@ -197,7 +197,7 @@ jobs:
             --to html5 \
             --template template.html \
             --metadata title="API" \
-            --highlight-style github \
+            --highlight-style pygments \
             --output "_site/api.html"
           
           rm api.md
