@@ -4,9 +4,6 @@ on:
   push:
     branches: [main]
     paths: ['**.md', '**.go']
-  pull_request:
-    branches: [main]
-    paths: ['**.md', '**.go']
   workflow_dispatch:
 
 permissions:
@@ -16,223 +13,69 @@ permissions:
 
 jobs:
   docs:
-    name: Build and Deploy Documentation
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     
     steps:
     - uses: actions/checkout@v4
-    
     - uses: actions/setup-go@v5
       with:
         go-version: '1.23'
-    
     - uses: actions/configure-pages@v4
     
-    - name: Install mdBook
+    - name: Setup Jekyll site
       run: |
-        curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.40/mdbook-v0.4.40-x86_64-unknown-linux-gnu.tar.gz | tar -xz
-        sudo mv mdbook /usr/local/bin/
+        mkdir -p _site
+        
+        # Use minimal theme from GitHub
+        cat > _config.yml << 'EOF'
+        theme: minima
+        title: Axon
+        description: AI-powered text adventure in your terminal
+        baseurl: ""
+        url: "https://elialdridge.github.io"
+        github_username: elialdridge
+        
+        markdown: kramdown
+        highlighter: rouge
+        
+        plugins:
+          - jekyll-feed
+          - jekyll-sitemap
+        
+        header_pages:
+          - README.md
+          - DOCUMENTATION.md
+          - CONTRIBUTING.md
+          - api.md
+        EOF
+        
+        # Generate API docs
+        echo "---" > api.md
+        echo "title: API Reference" >> api.md
+        echo "---" >> api.md
+        echo "" >> api.md
+        echo "# API Reference" >> api.md
+        echo "" >> api.md
+        
+        go list ./... 2>/dev/null | while read pkg; do
+          echo "## $(basename $pkg)" >> api.md
+          echo "" >> api.md
+          echo '```go' >> api.md
+          go doc $pkg 2>/dev/null >> api.md || echo "No documentation available"
+          echo '```' >> api.md
+          echo "" >> api.md
+        done
     
-    - name: Setup mdBook project
-      run: |
-        # Initialize mdBook if not exists
-        if [[ ! -f "book.toml" ]]; then
-          mdbook init --force .
-        fi
-        
-        # Configure book.toml
-        cat > book.toml << 'EOF'
-        [book]
-        title = "Axon"
-        description = "AI-powered text adventure in your terminal"
-        authors = ["Axon Team"]
-        language = "en"
-        src = "docs"
-        
-        [output.html]
-        default-theme = "light"
-        preferred-dark-theme = "navy"
-        git-repository-url = "https://github.com/elialdridge/axon"
-        edit-url-template = "https://github.com/elialdridge/axon/edit/main/{path}"
-        mathjax-support = false
-        copy-fonts = false
-        
-        [output.html.search]
-        enable = true
-        limit-results = 30
-        teaser-word-count = 30
-        use-boolean-and = true
-        boost-title = 2
-        boost-hierarchy = 1
-        boost-paragraph = 1
-        
-        [output.html.print]
-        enable = true
-        page-break = false
-        
-        [output.html.fold]
-        enable = false
-        level = 0
-        EOF
-        
-        # Create docs directory structure
-        mkdir -p docs
-        
-        # Create SUMMARY.md for navigation
-        cat > docs/SUMMARY.md << 'EOF'
-        # Summary
-        
-        [Introduction](./README.md)
-        
-        # Guide
-        
-        - [Documentation](./DOCUMENTATION.md)
-        - [Contributing](./CONTRIBUTING.md)
-        
-        # Reference
-        
-        - [API](./api.md)
-        - [CLI](./cli.md)
-        EOF
-        
-        # Copy existing markdown files to docs/
-        cp README.md docs/ 2>/dev/null || echo "# Axon\n\nWelcome to Axon documentation." > docs/README.md
-        cp DOCUMENTATION.md docs/ 2>/dev/null || echo "# Documentation\n\nDetailed documentation will be here." > docs/DOCUMENTATION.md
-        cp CONTRIBUTING.md docs/ 2>/dev/null || echo "# Contributing\n\nContribution guidelines will be here." > docs/CONTRIBUTING.md
-    
-    - name: Generate API and CLI documentation
-      run: |
-        # Generate API documentation
-        cat > docs/api.md << 'EOF'
-        # API Reference
-        
-        Complete API documentation for all Axon packages.
-        
-        EOF
-        
-        if go list ./... >/dev/null 2>&1; then
-          for pkg in $(go list ./... 2>/dev/null); do
-            pkg_name=$(basename "$pkg")
-            echo "## \`$pkg_name\`" >> docs/api.md
-            echo "" >> docs/api.md
-            echo '```go' >> docs/api.md
-            go doc "$pkg" 2>/dev/null >> docs/api.md || echo "No documentation available."
-            echo '```' >> docs/api.md
-            echo "" >> docs/api.md
-          done
-        else
-          echo "No Go packages found." >> docs/api.md
-        fi
-        
-        # Generate CLI documentation
-        cat > docs/cli.md << 'EOF'
-        # Command Line Interface
-        
-        ## Installation
-        
-        ```bash
-        git clone <repository-url>
-        cd axon
-        go build -o axon .
-        ```
-        
-        ## Usage
-        
-        ```bash
-        # Start the game
-        ./axon
-        
-        # With API key
-        OPENROUTER_API_KEY=your_key ./axon
-        ```
-        
-        ## Configuration
-        
-        Config file: `~/.axon/config.json`
-        
-        ```json
-        {
-          "ai": {
-            "openrouter_key": "your_key",
-            "gemini_key": "your_key"
-          },
-          "game": {
-            "auto_save": true,
-            "save_interval": 30
-          },
-          "terminal": {
-            "monochrome": true
-          }
-        }
-        ```
-        
-        ## Environment Variables
-        
-        | Variable | Description |
-        |----------|-------------|
-        | `OPENROUTER_API_KEY` | OpenRouter API key |
-        | `GEMINI_API_KEY` | Gemini API key |
-        | `AXON_CONFIG_DIR` | Custom config directory |
-        EOF
-    
-    - name: Create custom CSS for ultra-minimal theme
-      run: |
-        mkdir -p theme/css
-        cat > theme/css/general.css << 'EOF'
-        /* Ultra-minimal theme */
-        * { box-sizing: border-box; }
-        
-        html { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { margin: 0; color: #333; background: #fff; line-height: 1.6; }
-        
-        .sidebar { background: #fafafa; border-right: 1px solid #eee; }
-        .sidebar .chapter li.part-title { color: #666; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin: 20px 0 5px 0; }
-        .sidebar .chapter li a { color: #333; text-decoration: none; padding: 2px 0; }
-        .sidebar .chapter li a:hover { color: #0066cc; }
-        .sidebar .chapter li a.active { color: #0066cc; font-weight: 500; }
-        
-        .content { max-width: 750px; margin: 0; padding: 20px 40px; }
-        .menu-title { font-size: 16px; font-weight: 600; margin: 0; }
-        
-        h1, h2, h3, h4, h5, h6 { color: #222; margin: 30px 0 15px 0; font-weight: 600; }
-        h1 { font-size: 28px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        h2 { font-size: 22px; border-bottom: 1px solid #f0f0f0; padding-bottom: 5px; }
-        h3 { font-size: 18px; }
-        
-        p { margin: 15px 0; }
-        
-        pre { background: #f8f8f8; border: 1px solid #e8e8e8; border-radius: 3px; padding: 15px; overflow-x: auto; font-size: 14px; }
-        code { background: #f0f0f0; padding: 2px 4px; border-radius: 2px; font-size: 14px; }
-        pre code { background: transparent; padding: 0; }
-        
-        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
-        th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
-        th { background: #f8f8f8; font-weight: 600; }
-        
-        blockquote { border-left: 3px solid #ddd; margin: 20px 0; padding: 0 20px; color: #666; }
-        
-        .nav-chapters { display: none; }
-        .mobile-nav-chapters { display: none; }
-        
-        @media (max-width: 768px) {
-          .content { padding: 15px 20px; }
-          h1 { font-size: 24px; }
-          h2 { font-size: 20px; }
-        }
-        EOF
-    
-    - name: Build with mdBook
-      run: mdbook build
+    - uses: actions/jekyll-build-pages@v1
+      with:
+        source: ./
+        destination: ./_site
     
     - uses: actions/upload-pages-artifact@v3
-      with:
-        path: book
     
-    - id: deployment
-      uses: actions/deploy-pages@v4
+    - uses: actions/deploy-pages@v4
 
