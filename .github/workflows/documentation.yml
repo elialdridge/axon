@@ -182,7 +182,7 @@ jobs:
     
     - name: Create custom CSS for ultra-minimal theme
       run: |
-        mkdir -p theme
+        mkdir -p theme/css
         cat > theme/css/general.css << 'EOF'
         /* Ultra-minimal theme */
         * { box-sizing: border-box; }
