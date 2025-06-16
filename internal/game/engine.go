@@ -93,7 +93,7 @@ func (e *Engine) ProcessPlayerAction(state *GameState, action string) error {
 	actionLower := strings.ToLower(action)
 	switch {
 	case strings.Contains(actionLower, "say") || strings.Contains(actionLower, "talk") || strings.Contains(actionLower, "speak"):
-		model = e.aiClient.GetBestModel("dialogue")
+		model = e.aiClient.GetBestModel("dialog")
 	case strings.Contains(actionLower, "inventory") || strings.Contains(actionLower, "stats"):
 		return e.handleSystemAction(state, action)
 	default:

@@ -145,7 +145,7 @@ func (c *Client) GetBestModel(task string) string {
 		return "openai/gpt-4o"
 	case "rule_setting":
 		return "openai/gpt-4o-mini"
-	case "dialogue":
+	case "dialog":
 		return "anthropic/claude-3-haiku"
 	default:
 		return "openai/gpt-4o-mini"

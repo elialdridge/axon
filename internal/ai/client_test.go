@@ -37,7 +37,7 @@ func TestGetBestModel(t *testing.T) {
 		{"world_building", "anthropic/claude-3.5-sonnet"},
 		{"storytelling", "openai/gpt-4o"},
 		{"rule_setting", "openai/gpt-4o-mini"},
-		{"dialogue", "anthropic/claude-3-haiku"},
+		{"dialog", "anthropic/claude-3-haiku"},
 		{"unknown_task", "openai/gpt-4o-mini"},
 	}
 
