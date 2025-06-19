@@ -9,9 +9,11 @@ func TestDetectTerminal(t *testing.T) {
 	// Save original environment
 	originalTerm := os.Getenv("TERM")
 	originalTermProgram := os.Getenv("TERM_PROGRAM")
+	originalCI := os.Getenv("CI")
 	defer func() {
 		os.Setenv("TERM", originalTerm)
 		os.Setenv("TERM_PROGRAM", originalTermProgram)
+		os.Setenv("CI", originalCI)
 	}()
 
 	tests := []struct {
@@ -55,6 +57,9 @@ func TestDetectTerminal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			os.Setenv("TERM", tt.term)
 			os.Setenv("TERM_PROGRAM", tt.termProgram)
+			// Clear CI variable to avoid interference with test expectations
+			os.Unsetenv("CI")
+			os.Unsetenv("BUILD")
 			
 			info := DetectTerminal()
 			

@@ -1,12 +1,13 @@
 name: Intelligent Performance Monitoring & Resource Management
 
 on:
-  schedule:
-    # Run performance monitoring every 8 hours
-    - cron: '0 */8 * * *'
-  push:
-    branches: [main, master]
-    paths: ['**.go', 'go.mod', 'go.sum']
+  # Temporarily disabled - complex workflow needs debugging
+  # schedule:
+  #   # Run performance monitoring every 8 hours
+  #   - cron: '0 */8 * * *'
+  # push:
+  #   branches: [main, master]
+  #   paths: ['**.go', 'go.mod', 'go.sum']
   workflow_dispatch:
     inputs:
       monitoring_depth:

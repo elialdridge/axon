@@ -1,10 +1,6 @@
 run:
   timeout: 5m
   tests: true
-  skip-dirs:
-    - vendor
-  skip-files:
-    - ".*_test.go"
 
 linters-settings:
   gocyclo:

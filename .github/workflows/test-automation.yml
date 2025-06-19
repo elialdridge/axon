@@ -1,9 +1,10 @@
 name: Intelligent Test Automation & Self-Healing
 
 on:
-  schedule:
-    # Run test analysis every 4 hours
-    - cron: '0 */4 * * *'
+  # Temporarily disabled - complex workflow needs debugging
+  # schedule:
+  #   # Run test analysis every 4 hours
+  #   - cron: '0 */4 * * *'
   push:
     branches: [main, master, develop]
     paths: ['**.go', '**_test.go']
