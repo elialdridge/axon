@@ -718,7 +718,7 @@ Use the included terminal detection utility to test compatibility:
 
 ```bash
 # Check current terminal capabilities
-./cmd/terminal-info/terminal-info
+./terminal-info
 
 # Test with different terminal types
 TERM=dumb ./axon          # Minimal mode
@@ -903,89 +903,69 @@ Axon follows a modular, layered architecture designed for maximum maintainabilit
 
 ```
 axon/
-├── main.go                 # Application entry point
-├── go.mod                  # Go module dependencies
-├── go.sum                  # Dependency checksums
-├── README.md               # Project overview
-├── DOCUMENTATION.md        # This comprehensive guide
-├── LICENSE                 # Software license
+├── main.go                    # Application entry point
+├── go.mod                     # Go module dependencies  
+├── go.sum                     # Dependency checksums
+├── README.md                  # Project overview
+├── DOCUMENTATION.md           # This comprehensive guide
+├── LICENSE                    # Software license
+├── CONTRIBUTING.md            # Contribution guidelines
+├── TERMINAL_COMPATIBILITY.md  # Terminal compatibility details
+├── TEST_REPORT.md             # Testing documentation
+├── Makefile                   # Build automation
+├── .markdownlint.json         # Markdown linting config
+├── .gitignore                 # Git ignore rules
+├── debug_world_creation.go    # Debug utilities
+├── terminal-info              # Built terminal info utility
+├── test_game                  # Built test binary
 │
-├── internal/               # Private application code
-│   ├── game/               # Core game engine
-│   │   ├── engine.go       # Main game logic
-│   │   ├── state.go        # Game state management
-│   │   ├── world.go        # World generation and management
-│   │   ├── player.go       # Player character system
-│   │   └── history.go      # Game history tracking
+├── internal/                  # Private application code
+│   ├── game/                  # Core game engine
+│   │   ├── engine.go          # Main game logic
+│   │   ├── engine_test.go     # Engine tests
+│   │   ├── integration_test.go # Integration tests
+│   │   ├── model.go           # Bubble Tea model
+│   │   ├── model_test.go      # Model tests  
+│   │   ├── state.go           # Game state management
+│   │   └── state_test.go      # State tests
 │   │
-│   ├── ai/                 # AI integration layer
-│   │   ├── client.go       # AI client interface
-│   │   ├── openrouter.go   # OpenRouter API implementation
-│   │   ├── gemini.go       # Google Gemini API implementation
-│   │   ├── models.go       # Model selection logic
-│   │   └── prompts.go      # Prompt templates and management
+│   ├── ai/                    # AI integration layer
+│   │   ├── client.go          # AI client interface
+│   │   └── client_test.go     # Client tests
 │   │
-│   ├── ui/                 # Terminal user interface
-│   │   ├── model.go        # Bubble Tea model
-│   │   ├── view.go         # UI rendering logic
-│   │   ├── update.go       # Event handling
-│   │   ├── styles.go       # UI styling definitions
-│   │   └── components.go   # Reusable UI components
+│   ├── ui/                    # Terminal user interface
+│   │   ├── styles.go          # UI styling definitions
+│   │   └── styles_test.go     # Style tests
 │   │
-│   ├── storage/            # Data persistence
-│   │   ├── json.go         # JSON file storage
-│   │   ├── save.go         # Save/load operations
-│   │   └── backup.go       # Backup and recovery
+│   ├── storage/               # Data persistence
+│   │   ├── storage.go         # Storage interface and implementation
+│   │   └── storage_test.go    # Storage tests
 │   │
-│   ├── config/             # Configuration management
-│   │   ├── config.go       # Configuration loading/saving
-│   │   ├── defaults.go     # Default configuration values
-│   │   └── validation.go   # Configuration validation
+│   ├── config/                # Configuration management
+│   │   ├── config.go          # Configuration loading/saving
+│   │   └── config_test.go     # Configuration tests
 │   │
-│   ├── terminal/           # Terminal compatibility
-│   │   ├── detect.go       # Terminal capability detection
-│   │   ├── size.go         # Terminal size detection
-│   │   └── compat.go       # Compatibility mode handling
+│   ├── terminal/              # Terminal compatibility
+│   │   ├── terminal.go        # Terminal detection and handling
+│   │   └── terminal_test.go   # Terminal tests
 │   │
-│   └── logger/             # Logging system
-│       ├── logger.go       # Main logging interface
-│       ├── debug.go        # Debug logging functionality
-│       └── file.go         # File-based logging
+│   └── logger/                # Logging system
+│       └── logger.go          # Logging implementation
 │
-├── pkg/                    # Public API packages (future)
-│   └── axon/               # Public interfaces
-│       ├── game.go         # Public game interface
-│       ├── ai.go           # Public AI interface
-│       └── storage.go      # Public storage interface
-│
-├── cmd/                    # Command-line tools
-│   ├── terminal-info/      # Terminal detection utility
+├── cmd/                       # Command-line tools
+│   ├── terminal-info/         # Terminal detection utility
 │   │   └── main.go
-│   └── save-manager/       # Save file management tool
+│   └── test/                  # Test utilities
 │       └── main.go
 │
-├── scripts/                # Build and deployment scripts
-│   ├── build.sh            # Cross-platform build script
-│   ├── test.sh             # Testing automation
-│   ├── release.sh          # Release preparation
-│   └── install.sh          # Installation script
-│
-├── testdata/               # Test data and fixtures
-│   ├── saves/              # Sample save files
-│   ├── configs/            # Test configurations
-│   └── prompts/            # Test prompts and responses
-│
-├── docs/                   # Additional documentation
-│   ├── API.md              # API documentation
-│   ├── CONTRIBUTING.md     # Contribution guidelines
-│   ├── CHANGELOG.md        # Version history
-│   └── examples/           # Usage examples
-│
-└── build/                  # Build artifacts (generated)
-    ├── axon                # Main binary
-    ├── terminal-info       # Utility binary
-    └── checksums.txt       # Binary checksums
+└── .github/                   # GitHub configuration
+    └── ISSUE_TEMPLATE/        # Issue templates
+        ├── bug_report.md
+        ├── feature_request.md
+        └── question.md
 ```
+
+**Note**: This reflects the actual current structure. Planned components mentioned in other sections represent future development goals.
 
 ### Module Dependencies
 
@@ -1309,24 +1289,24 @@ func (w *World) GetLocationDescription(location string) (string, bool)
 
 ```go
 type Player struct {
-    Name        string           `json:"name"`
-    Description string           `json:"description"`
-    Inventory   []InventoryItem  `json:"inventory"`
-    Stats       map[string]int   `json:"stats"`
-    Status      string           `json:"status"`
+    Name        string         `json:"name"`
+    Description string         `json:"description"`
+    Inventory   []Item         `json:"inventory"`
+    Stats       map[string]int `json:"stats"`
+    Status      string         `json:"status"`
 }
 
-type InventoryItem struct {
+type Item struct {
     Name        string `json:"name"`
     Description string `json:"description"`
     Quantity    int    `json:"quantity"`
 }
 
-// Methods
-func (p *Player) AddItem(item InventoryItem)
-func (p *Player) RemoveItem(name string, quantity int) error
-func (p *Player) HasItem(name string) bool
-func (p *Player) UpdateStat(name string, value int)
+// Methods (planned - not all implemented yet)
+func (p *Player) AddItem(item Item)              // Planned
+func (p *Player) RemoveItem(name string, quantity int) error  // Planned
+func (p *Player) HasItem(name string) bool       // Planned
+func (p *Player) UpdateStat(name string, value int)  // Planned
 ```
 
 #### Configuration Management
@@ -1336,34 +1316,33 @@ type Config struct {
     Terminal TerminalConfig `json:"terminal"`
     AI       AIConfig       `json:"ai"`
     Game     GameConfig     `json:"game"`
-    UI       UIConfig       `json:"ui"`
-    Logging  LoggingConfig  `json:"logging"`
 }
 
 type TerminalConfig struct {
-    Width         int  `json:"width"`
-    Height        int  `json:"height"`
-    ColorEnabled  bool `json:"color_enabled"`
-    UnicodeSupport bool `json:"unicode_support"`
-    RefreshRate   int  `json:"refresh_rate"`
+    Width            int  `json:"width"`
+    Height           int  `json:"height"`
+    ColorEnabled     bool `json:"color_enabled"`
+    ForceMinimal     bool `json:"force_minimal"`
+    ForceSystemV     bool `json:"force_systemv"`
+    AutoDetect       bool `json:"auto_detect"`
+    MouseEnabled     bool `json:"mouse_enabled"`
+    AltScreenEnabled bool `json:"alt_screen_enabled"`
 }
 
 type AIConfig struct {
-    OpenRouterAPIKey  string  `json:"openrouter_api_key"`
-    GeminiAPIKey      string  `json:"gemini_api_key"`
-    DefaultModel      string  `json:"default_model"`
-    MaxTokens         int     `json:"max_tokens"`
-    Temperature       float64 `json:"temperature"`
-    TimeoutSeconds    int     `json:"timeout_seconds"`
-    RetryAttempts     int     `json:"retry_attempts"`
-    FallbackEnabled   bool    `json:"fallback_enabled"`
+    OpenRouterAPIKey string `json:"openrouter_api_key"`
+    GeminiAPIKey     string `json:"gemini_api_key"`
+    DefaultModel     string `json:"default_model"`
+}
+
+type GameConfig struct {
+    HistoryLimit int    `json:"history_limit"`
+    SaveDir      string `json:"save_dir"`
 }
 
 // Methods
 func Load() *Config
 func (c *Config) Save() error
-func (c *Config) Validate() error
-func (c *Config) GetDefaults() *Config
 ```
 
 ### Extension Points
@@ -1615,16 +1594,18 @@ make build
 #### Build System
 
 ```makefile
-# Makefile
-.PHONY: build test clean lint
+# Actual Makefile content (simplified)
+.PHONY: build test clean lint install dev run cross-build release help
 
 BUILD_DIR := build
 BINARY_NAME := axon
-VERSION := $(shell git describe --tags --always --dirty)
-LDFLAGS := -ldflags "-X main.version=$(VERSION)"
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS := -ldflags "-X main.version=$(VERSION) -s -w"
+GOFLAGS := -trimpath
 
 build:
-	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) .
+	@mkdir -p $(BUILD_DIR)
+	go build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) .
 
 test:
 	go test -v ./...
@@ -1638,18 +1619,20 @@ lint:
 
 clean:
 	rm -rf $(BUILD_DIR)
-
-cross-build:
-	./scripts/build.sh
-
-release:
-	./scripts/release.sh
-
-dev:
-	go run . --debug
+	cross-build:
+	# Cross-compile for multiple platforms
+	GOOS=linux GOARCH=amd64 go build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 .
+	GOOS=darwin GOARCH=amd64 go build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 .
+	GOOS=windows GOARCH=amd64 go build $(GOFLAGS) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe .
 
 install:
-	go install $(LDFLAGS) .
+	go install $(GOFLAGS) $(LDFLAGS) .
+
+dev:
+	go run $(LDFLAGS) . --debug
+
+run: build
+	./$(BUILD_DIR)/$(BINARY_NAME)
 ```
 
 #### Testing Strategy
