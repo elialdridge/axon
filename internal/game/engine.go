@@ -6,6 +6,7 @@ import (
 
 	"axon/internal/ai"
 	"axon/internal/config"
+	"axon/internal/logger"
 )
 
 // Engine represents the game engine
@@ -25,43 +26,60 @@ func NewEngine(cfg *config.Config) *Engine {
 
 // InitializeWorld creates the initial game world based on a seed prompt
 func (e *Engine) InitializeWorld(state *GameState, seedPrompt string) error {
+	logger.Info("Starting world initialization with prompt: %s", seedPrompt)
+	logger.LogWorldCreation("start", seedPrompt)
+
 	// Use the best model for world building
 	model := e.aiClient.GetBestModel("world_building")
+	logger.Debug("Selected model for world building: %s", model)
 
-	// Create context for world generation
+	// Create simplified context for world generation
 	context := []string{
-		"You are a master world builder for a text-based adventure game.",
-		"Create a detailed, immersive world based on the user's prompt.",
-		"Respond with JSON in this format:",
-		`{"name": "World Name", "description": "Detailed description", "setting": "Genre/Setting", "rules": ["rule1", "rule2"], "starting_location": "location name", "starting_location_desc": "description"}`,
+		"You are creating a world for a text-based adventure game.",
+		"Create a brief, engaging world description based on the user's prompt.",
+		"Keep your response concise and immersive.",
 	}
 
-	prompt := fmt.Sprintf("Create a world for this scenario: %s", seedPrompt)
+	prompt := fmt.Sprintf("Create a world: %s. Describe the setting in 2-3 sentences.", seedPrompt)
+	logger.Debug("World creation prompt: %s", prompt)
+	logger.LogWorldCreation("context", context)
 
 	req := ai.Request{
 		Prompt:    prompt,
 		Model:     model,
-		MaxTokens: 1000,
+		MaxTokens: 200, // Reduced for faster response
 		Context:   context,
 	}
 
+	logger.LogWorldCreation("request", req)
+
+	logger.Info("Sending world creation request to AI")
 	resp, err := e.aiClient.Generate(req)
 	if err != nil {
+		logger.Error("AI world generation failed: %v", err)
 		return fmt.Errorf("failed to generate world: %w", err)
 	}
 
+	logger.LogWorldCreation("response", resp)
+
 	if resp.Error != nil {
-		// Fallback to basic world creation
-		state.World.Name = "Unknown Realm"
-		state.World.Description = "A mysterious world awaits your exploration."
-		state.World.Setting = "Fantasy"
-		state.World.Rules = []string{"Anything is possible", "Actions have consequences"}
-		state.World.CurrentLocation = "Starting Point"
-		state.World.Locations["Starting Point"] = "You find yourself in an unknown place, ready to begin your adventure."
-		state.AddHistoryEntry("system", "World creation failed, using default world.")
+		logger.Error("AI response contains error: %v", resp.Error)
+		logger.LogWorldCreation("fallback", "using themed world based on prompt")
+		// Create themed fallback world based on the seed prompt
+		themeWorld := e.createThemedWorld(seedPrompt)
+		state.World.Name = themeWorld.Name
+		state.World.Description = themeWorld.Description
+		state.World.Setting = themeWorld.Setting
+		state.World.Rules = themeWorld.Rules
+		state.World.CurrentLocation = themeWorld.CurrentLocation
+		state.World.Locations[themeWorld.CurrentLocation] = themeWorld.Description
+		state.AddHistoryEntry("narrator", themeWorld.Description)
+		state.AddHistoryEntry("narrator", "The mists of reality shimmer and coalesce, drawing upon ancient memories and forgotten tales to weave this world into existence...")
 	} else {
-		// Parse AI response and populate world (simplified - in practice you'd parse JSON)
-		state.World.Name = "AI Generated World"
+		logger.Info("AI world creation successful, parsing response")
+		logger.LogWorldCreation("ai_success", resp.Text)
+		// Parse AI response and populate world
+		state.World.Name = "Generated World"
 		state.World.Description = resp.Text
 		state.World.Setting = "AI Generated"
 		state.World.Rules = []string{"AI-driven narrative", "Player choices matter"}
@@ -70,11 +88,14 @@ func (e *Engine) InitializeWorld(state *GameState, seedPrompt string) error {
 		state.AddHistoryEntry("narrator", resp.Text)
 	}
 
+	logger.LogGameState(state)
+	logger.Info("World initialization completed successfully")
 	return nil
 }
 
 // ProcessPlayerAction processes a player action and generates response
 func (e *Engine) ProcessPlayerAction(state *GameState, action string) error {
+	logger.Info("Processing player action: %s", action)
 	// Add player action to history
 	state.AddHistoryEntry("player", action)
 
@@ -120,16 +141,21 @@ func (e *Engine) ProcessPlayerAction(state *GameState, action string) error {
 		Context:   context,
 	}
 
+	logger.Info("Sending action request to AI")
 	resp, err := e.aiClient.Generate(req)
 	if err != nil {
+		logger.Error("AI action processing failed: %v", err)
 		return fmt.Errorf("failed to generate response: %w", err)
 	}
 
 	if resp.Error != nil {
-		// Fallback response
-		state.AddHistoryEntry("narrator", "Something happens in response to your action.")
-		state.AddHistoryEntry("system", fmt.Sprintf("AI Error: %v", resp.Error))
+		logger.Error("AI response contains error: %v", resp.Error)
+		// Immersive fallback response based on action type
+		fallbackResponse := e.generateFallbackResponse(action, state)
+		state.AddHistoryEntry("narrator", fallbackResponse)
 	} else {
+		logger.Info("AI action processing successful")
+		logger.Debug("AI response: %s", resp.Text)
 		state.AddHistoryEntry("narrator", resp.Text)
 	}
 
@@ -237,4 +263,130 @@ func (e *Engine) GenerateActionSuggestions(state *GameState) ([]string, error) {
 	}
 
 	return cleanSuggestions, nil
+}
+
+// createThemedWorld creates a themed world based on user input when AI is unavailable
+func (e *Engine) createThemedWorld(seedPrompt string) *World {
+	lower := strings.ToLower(seedPrompt)
+
+	// Cyberpunk themes
+	if strings.Contains(lower, "cyberpunk") || strings.Contains(lower, "2077") || strings.Contains(lower, "cyber") {
+		return &World{
+			Name: "Neo-Tokyo 2077",
+			Description: "Towering neon-lit skyscrapers pierce the smoggy sky above rain-slicked streets. Corporate megastructures cast shadows over bustling markets where cybernetic implants gleam under holographic advertisements. You stand at the edge of the underground district, where rebels and hackers gather in the shadows.",
+			Setting: "Cyberpunk",
+			Rules: []string{"Technology rules all", "Corporate power is absolute", "Information is currency", "Trust no one"},
+			CurrentLocation: "Underground District",
+			Locations: make(map[string]string),
+		}
+	}
+
+	// Fantasy themes
+	if strings.Contains(lower, "fantasy") || strings.Contains(lower, "medieval") || strings.Contains(lower, "kingdom") || strings.Contains(lower, "magic") {
+		return &World{
+			Name: "Realm of Eldoria",
+			Description: "Ancient stone towers rise from mist-covered valleys where dragons once soared. Cobblestone paths wind through enchanted forests filled with mysterious creatures. You find yourself at the edge of a village where flickering torches cast dancing shadows on thatched roofs.",
+			Setting: "High Fantasy",
+			Rules: []string{"Magic flows through all things", "Ancient powers stir", "Honor above all", "Knowledge is power"},
+			CurrentLocation: "Village Edge",
+			Locations: make(map[string]string),
+		}
+	}
+
+	// Space/Sci-fi themes
+	if strings.Contains(lower, "space") || strings.Contains(lower, "station") || strings.Contains(lower, "galaxy") || strings.Contains(lower, "alien") {
+		return &World{
+			Name: "Frontier Station Alpha",
+			Description: "The vast expanse of space stretches endlessly beyond reinforced viewports. This research station orbits a mysterious planet where strange energy readings emanate from the surface. Emergency lights flicker in the corridors as you hear the hum of life support systems working overtime.",
+			Setting: "Space Opera",
+			Rules: []string{"The void is unforgiving", "Technology can fail", "First contact protocols exist", "Survival is paramount"},
+			CurrentLocation: "Station Corridor",
+			Locations: make(map[string]string),
+		}
+	}
+
+	// Post-apocalyptic themes
+	if strings.Contains(lower, "apocalyptic") || strings.Contains(lower, "wasteland") || strings.Contains(lower, "survivor") || strings.Contains(lower, "ruins") {
+		return &World{
+			Name: "The Shattered Lands",
+			Description: "Crumbling ruins of civilization stretch across a barren landscape under an eternally grey sky. Rusted vehicles and collapsed buildings tell the story of a world that once was. You emerge from a makeshift shelter, scanning the horizon for signs of other survivors or threats.",
+			Setting: "Post-Apocalyptic",
+			Rules: []string{"Resources are scarce", "Trust is earned", "The past is gone", "Adapt or perish"},
+			CurrentLocation: "Wasteland Outpost",
+			Locations: make(map[string]string),
+		}
+	}
+
+	// Default modern/mystery theme
+	return &World{
+		Name: "The Unknown",
+		Description: "You find yourself in a place that defies easy description. Familiar yet strange, ordinary yet filled with hidden possibilities. The air itself seems to whisper of secrets waiting to be discovered and adventures yet to unfold.",
+		Setting: "Modern Mystery",
+		Rules: []string{"Nothing is as it seems", "Every choice matters", "Mysteries abound", "Reality is flexible"},
+		CurrentLocation: "Starting Point",
+		Locations: make(map[string]string),
+	}
+}
+
+// generateFallbackResponse creates immersive fallback responses when AI is unavailable
+func (e *Engine) generateFallbackResponse(action string, state *GameState) string {
+	actionLower := strings.ToLower(action)
+
+	// Movement actions
+	if strings.Contains(actionLower, "go") || strings.Contains(actionLower, "walk") || strings.Contains(actionLower, "move") || strings.Contains(actionLower, "head") {
+		return "You move through the area, your footsteps echoing softly as you explore your surroundings. The path ahead remains shrouded in mystery, waiting for your next decision."
+	}
+
+	// Looking/observing actions
+	if strings.Contains(actionLower, "look") || strings.Contains(actionLower, "examine") || strings.Contains(actionLower, "observe") || strings.Contains(actionLower, "inspect") {
+		return "You take a moment to carefully observe your surroundings. Details emerge from the shadows - subtle signs and hidden clues that might prove important on your journey."
+	}
+
+	// Searching actions
+	if strings.Contains(actionLower, "search") || strings.Contains(actionLower, "find") || strings.Contains(actionLower, "seek") {
+		return "You search methodically, running your hands along surfaces and peering into dark corners. Though nothing immediately reveals itself, you sense that persistence might yet yield results."
+	}
+
+	// Combat/fighting actions
+	if strings.Contains(actionLower, "attack") || strings.Contains(actionLower, "fight") || strings.Contains(actionLower, "strike") || strings.Contains(actionLower, "hit") {
+		return "Your muscles tense as you prepare for conflict. The air crackles with tension, and you feel the familiar rush of adrenaline coursing through your veins."
+	}
+
+	// Taking/grabbing actions
+	if strings.Contains(actionLower, "take") || strings.Contains(actionLower, "grab") || strings.Contains(actionLower, "pick") || strings.Contains(actionLower, "get") {
+		return "You reach out carefully, your fingers closing around the object. A sense of acquisition fills you as you secure this new addition to your belongings."
+	}
+
+	// Speaking/communication actions
+	if strings.Contains(actionLower, "say") || strings.Contains(actionLower, "speak") || strings.Contains(actionLower, "talk") || strings.Contains(actionLower, "tell") {
+		return "Your words hang in the air, carrying with them the weight of intention. Whether anyone is listening remains to be seen, but you have made your voice heard."
+	}
+
+	// Opening/unlocking actions
+	if strings.Contains(actionLower, "open") || strings.Contains(actionLower, "unlock") || strings.Contains(actionLower, "break") {
+		return "With determined effort, you work to overcome the obstacle before you. Progress is slow but steady, and you sense that your persistence will eventually pay off."
+	}
+
+	// Waiting/resting actions
+	if strings.Contains(actionLower, "wait") || strings.Contains(actionLower, "rest") || strings.Contains(actionLower, "pause") || strings.Contains(actionLower, "sit") {
+		return "Time passes quietly as you pause in your journey. The world continues its ancient rhythms around you, and you feel a moment of peace amidst the uncertainty."
+	}
+
+	// Running/escaping actions
+	if strings.Contains(actionLower, "run") || strings.Contains(actionLower, "flee") || strings.Contains(actionLower, "escape") {
+		return "Your heart pounds as you move swiftly away from potential danger. The landscape blurs past you as survival instincts take over, guiding your hurried steps."
+	}
+
+	// Default mystical response for unknown actions
+	fallbackResponses := []string{
+		"The fabric of reality ripples slightly in response to your action, though the full consequences remain hidden in the mists of time.",
+		"Something stirs in the unseen spaces around you. Your action has been noted by forces beyond immediate comprehension.",
+		"The world responds to your intent in ways both subtle and profound. Change flows through the environment like water through stone.",
+		"Ancient energies swirl around your action, weaving new possibilities into the tapestry of your adventure.",
+		"Your deed echoes through the mysterious realm, creating ripples that will shape future moments in ways yet unknown.",
+	}
+
+	// Use turn number to pseudo-randomly select response
+	responseIndex := state.Turn % len(fallbackResponses)
+	return fallbackResponses[responseIndex]
 }

@@ -18,57 +18,29 @@ type Styles struct {
 	Scrollbar     lipgloss.Style
 }
 
-// NewStyles creates new monochrome styles
+// NewStyles creates new simple ASCII-only styles
 func NewStyles() *Styles {
 	return &Styles{
-		Base: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#000000")),
+		Base: lipgloss.NewStyle(),
 
 		HistoryPanel: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#000000")).
 			Padding(0, 1),
 
 		InputPanel: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#000000")).
-			Border(lipgloss.NormalBorder(), true, false, false, false).
-			BorderForeground(lipgloss.Color("#FFFFFF")).
 			Padding(0, 1),
 
-		PlayerText: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#000000")).
-			Bold(true),
+		PlayerText: lipgloss.NewStyle(),
 
-		NarratorText: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#000000")),
+		NarratorText: lipgloss.NewStyle(),
 
-		SystemText: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#000000")).
-			Italic(true),
+		SystemText: lipgloss.NewStyle(),
 
-		InventoryText: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#000000")).
-			Faint(true),
+		InventoryText: lipgloss.NewStyle(),
 
-		Border: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#000000")).
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("#FFFFFF")),
+		Border: lipgloss.NewStyle(),
 
-		Prompt: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#000000")).
-			Bold(true),
+		Prompt: lipgloss.NewStyle(),
 
-		Scrollbar: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Background(lipgloss.Color("#000000")),
+		Scrollbar: lipgloss.NewStyle(),
 	}
 }
