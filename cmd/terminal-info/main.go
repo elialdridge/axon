@@ -40,6 +40,11 @@ func main() {
 	} else if termInfo.IsSystemV {
 		exitCode = 3 // Exit code 3 for System V terminal
 	}
+	
+	// If logger was initialized, close it before exiting
+	if *verbose {
+		logger.Close()
+	}
 	os.Exit(exitCode)
 }
 

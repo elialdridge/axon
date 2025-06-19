@@ -115,7 +115,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleEnter()
 
 	case "backspace":
-		if len(m.inputValue) > 0 {
+		if m.inputValue != "" {
 			m.inputValue = m.inputValue[:len(m.inputValue)-1]
 		}
 		return m, nil
@@ -385,11 +385,11 @@ func (m Model) renderHistory(height int) string {
 	for _, entry := range history {
 		var formattedContent string
 		switch entry.Type {
-		case "player":
+		case entryTypePlayer:
 			formattedContent = "> " + entry.Content
-		case "narrator":
+		case entryTypeNarrator:
 			formattedContent = entry.Content
-		case "system":
+		case entryTypeSystem:
 			formattedContent = "[System] " + entry.Content
 		}
 		// Wrap text to terminal width

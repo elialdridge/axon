@@ -62,7 +62,7 @@ func (c *Config) Save() error {
 	configDir := filepath.Dir(configPath)
 
 	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return err
 	}
 
@@ -71,7 +71,7 @@ func (c *Config) Save() error {
 		return err
 	}
 
-	return os.WriteFile(configPath, data, 0644)
+	return os.WriteFile(configPath, data, 0o644)
 }
 
 // defaultConfig returns default configuration

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"axon/internal/config"
 	"axon/internal/game"
@@ -45,7 +44,7 @@ func main() {
 	if _, err := p.Run(); err != nil {
 		logger.Error("Error running game: %v", err)
 		fmt.Printf("Error running game: %v\n", err)
-		os.Exit(1)
+		return
 	}
 
 	logger.Info("Game ended normally")

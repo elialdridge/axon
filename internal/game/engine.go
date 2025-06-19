@@ -231,7 +231,7 @@ func (e *Engine) GenerateActionSuggestions(state *GameState) ([]string, error) {
 	recentHistory := state.GetRecentHistory(3)
 	contextLines := make([]string, 0)
 	for _, entry := range recentHistory {
-		if entry.Type == "narrator" {
+		if entry.Type == entryTypeNarrator {
 			contextLines = append(contextLines, entry.Content)
 		}
 	}
@@ -276,55 +276,85 @@ func (e *Engine) GenerateActionSuggestions(state *GameState) ([]string, error) {
 func (e *Engine) createThemedWorld(seedPrompt string) *World {
 	lower := strings.ToLower(seedPrompt)
 
-	// Cyberpunk themes
-	if strings.Contains(lower, "cyberpunk") || strings.Contains(lower, "2077") || strings.Contains(lower, "cyber") {
-		return &World{
-			Name:            "Neo-Tokyo 2077",
-			Description:     "Towering neon-lit skyscrapers pierce the smoggy sky above rain-slicked streets. Corporate megastructures cast shadows over bustling markets where cybernetic implants gleam under holographic advertisements. You stand at the edge of the underground district, where rebels and hackers gather in the shadows.",
-			Setting:         "Cyberpunk",
-			Rules:           []string{"Technology rules all", "Corporate power is absolute", "Information is currency", "Trust no one"},
-			CurrentLocation: "Underground District",
-			Locations:       make(map[string]string),
-		}
+	// Use helper functions to detect themes and reduce complexity
+	if e.isCyberpunkTheme(lower) {
+		return e.createCyberpunkWorld()
 	}
-
-	// Fantasy themes
-	if strings.Contains(lower, "fantasy") || strings.Contains(lower, "medieval") || strings.Contains(lower, "kingdom") || strings.Contains(lower, "magic") {
-		return &World{
-			Name:            "Realm of Eldoria",
-			Description:     "Ancient stone towers rise from mist-covered valleys where dragons once soared. Cobblestone paths wind through enchanted forests filled with mysterious creatures. You find yourself at the edge of a village where flickering torches cast dancing shadows on thatched roofs.",
-			Setting:         "High Fantasy",
-			Rules:           []string{"Magic flows through all things", "Ancient powers stir", "Honor above all", "Knowledge is power"},
-			CurrentLocation: "Village Edge",
-			Locations:       make(map[string]string),
-		}
+	if e.isFantasyTheme(lower) {
+		return e.createFantasyWorld()
 	}
-
-	// Space/Sci-fi themes
-	if strings.Contains(lower, "space") || strings.Contains(lower, "station") || strings.Contains(lower, "galaxy") || strings.Contains(lower, "alien") {
-		return &World{
-			Name:            "Frontier Station Alpha",
-			Description:     "The vast expanse of space stretches endlessly beyond reinforced viewports. This research station orbits a mysterious planet where strange energy readings emanate from the surface. Emergency lights flicker in the corridors as you hear the hum of life support systems working overtime.",
-			Setting:         "Space Opera",
-			Rules:           []string{"The void is unforgiving", "Technology can fail", "First contact protocols exist", "Survival is paramount"},
-			CurrentLocation: "Station Corridor",
-			Locations:       make(map[string]string),
-		}
+	if e.isSpaceTheme(lower) {
+		return e.createSpaceWorld()
 	}
-
-	// Post-apocalyptic themes
-	if strings.Contains(lower, "apocalyptic") || strings.Contains(lower, "wasteland") || strings.Contains(lower, "survivor") || strings.Contains(lower, "ruins") {
-		return &World{
-			Name:            "The Shattered Lands",
-			Description:     "Crumbling ruins of civilization stretch across a barren landscape under an eternally grey sky. Rusted vehicles and collapsed buildings tell the story of a world that once was. You emerge from a makeshift shelter, scanning the horizon for signs of other survivors or threats.",
-			Setting:         "Post-Apocalyptic",
-			Rules:           []string{"Resources are scarce", "Trust is earned", "The past is gone", "Adapt or perish"},
-			CurrentLocation: "Wasteland Outpost",
-			Locations:       make(map[string]string),
-		}
+	if e.isApocalypticTheme(lower) {
+		return e.createApocalypticWorld()
 	}
 
 	// Default modern/mystery theme
+	return e.createDefaultWorld()
+}
+
+func (e *Engine) isCyberpunkTheme(lower string) bool {
+	return strings.Contains(lower, "cyberpunk") || strings.Contains(lower, "2077") || strings.Contains(lower, "cyber")
+}
+
+func (e *Engine) isFantasyTheme(lower string) bool {
+	return strings.Contains(lower, "fantasy") || strings.Contains(lower, "medieval") || strings.Contains(lower, "kingdom") || strings.Contains(lower, "magic")
+}
+
+func (e *Engine) isSpaceTheme(lower string) bool {
+	return strings.Contains(lower, "space") || strings.Contains(lower, "station") || strings.Contains(lower, "galaxy") || strings.Contains(lower, "alien")
+}
+
+func (e *Engine) isApocalypticTheme(lower string) bool {
+	return strings.Contains(lower, "apocalyptic") || strings.Contains(lower, "wasteland") || strings.Contains(lower, "survivor") || strings.Contains(lower, "ruins")
+}
+
+func (e *Engine) createCyberpunkWorld() *World {
+	return &World{
+		Name:            "Neo-Tokyo 2077",
+		Description:     "Towering neon-lit skyscrapers pierce the smoggy sky above rain-slicked streets. Corporate megastructures cast shadows over bustling markets where cybernetic implants gleam under holographic advertisements. You stand at the edge of the underground district, where rebels and hackers gather in the shadows.",
+		Setting:         "Cyberpunk",
+		Rules:           []string{"Technology rules all", "Corporate power is absolute", "Information is currency", "Trust no one"},
+		CurrentLocation: "Underground District",
+		Locations:       make(map[string]string),
+	}
+}
+
+func (e *Engine) createFantasyWorld() *World {
+	return &World{
+		Name:            "Realm of Eldoria",
+		Description:     "Ancient stone towers rise from mist-covered valleys where dragons once soared. Cobblestone paths wind through enchanted forests filled with mysterious creatures. You find yourself at the edge of a village where flickering torches cast dancing shadows on thatched roofs.",
+		Setting:         "High Fantasy",
+		Rules:           []string{"Magic flows through all things", "Ancient powers stir", "Honor above all", "Knowledge is power"},
+		CurrentLocation: "Village Edge",
+		Locations:       make(map[string]string),
+	}
+}
+
+func (e *Engine) createSpaceWorld() *World {
+	return &World{
+		Name:            "Frontier Station Alpha",
+		Description:     "The vast expanse of space stretches endlessly beyond reinforced viewports. This research station orbits a mysterious planet where strange energy readings emanate from the surface. Emergency lights flicker in the corridors as you hear the hum of life support systems working overtime.",
+		Setting:         "Space Opera",
+		Rules:           []string{"The void is unforgiving", "Technology can fail", "First contact protocols exist", "Survival is paramount"},
+		CurrentLocation: "Station Corridor",
+		Locations:       make(map[string]string),
+	}
+}
+
+func (e *Engine) createApocalypticWorld() *World {
+	return &World{
+		Name:            "The Shattered Lands",
+		Description:     "Crumbling ruins of civilization stretch across a barren landscape under an eternally grey sky. Rusted vehicles and collapsed buildings tell the story of a world that once was. You emerge from a makeshift shelter, scanning the horizon for signs of other survivors or threats.",
+		Setting:         "Post-Apocalyptic",
+		Rules:           []string{"Resources are scarce", "Trust is earned", "The past is gone", "Adapt or perish"},
+		CurrentLocation: "Wasteland Outpost",
+		Locations:       make(map[string]string),
+	}
+}
+
+func (e *Engine) createDefaultWorld() *World {
 	return &World{
 		Name:            "The Unknown",
 		Description:     "You find yourself in a place that defies easy description. Familiar yet strange, ordinary yet filled with hidden possibilities. The air itself seems to whisper of secrets waiting to be discovered and adventures yet to unfold.",
@@ -339,52 +369,83 @@ func (e *Engine) createThemedWorld(seedPrompt string) *World {
 func (e *Engine) generateFallbackResponse(action string, state *GameState) string {
 	actionLower := strings.ToLower(action)
 
-	// Movement actions
-	if strings.Contains(actionLower, "go") || strings.Contains(actionLower, "walk") || strings.Contains(actionLower, "move") || strings.Contains(actionLower, "head") {
+	// Try to match action with predefined responses
+	if response := e.tryMatchActionType(actionLower); response != "" {
+		return response
+	}
+
+	// Return default mystical response
+	return e.getDefaultFallbackResponse(state)
+}
+
+func (e *Engine) tryMatchActionType(actionLower string) string {
+	if e.isMovementAction(actionLower) {
 		return "You move through the area, your footsteps echoing softly as you explore your surroundings. The path ahead remains shrouded in mystery, waiting for your next decision."
 	}
-
-	// Looking/observing actions
-	if strings.Contains(actionLower, "look") || strings.Contains(actionLower, "examine") || strings.Contains(actionLower, "observe") || strings.Contains(actionLower, "inspect") {
+	if e.isObservationAction(actionLower) {
 		return "You take a moment to carefully observe your surroundings. Details emerge from the shadows - subtle signs and hidden clues that might prove important on your journey."
 	}
-
-	// Searching actions
-	if strings.Contains(actionLower, "search") || strings.Contains(actionLower, "find") || strings.Contains(actionLower, "seek") {
+	if e.isSearchAction(actionLower) {
 		return "You search methodically, running your hands along surfaces and peering into dark corners. Though nothing immediately reveals itself, you sense that persistence might yet yield results."
 	}
-
-	// Combat/fighting actions
-	if strings.Contains(actionLower, "attack") || strings.Contains(actionLower, "fight") || strings.Contains(actionLower, "strike") || strings.Contains(actionLower, "hit") {
+	if e.isCombatAction(actionLower) {
 		return "Your muscles tense as you prepare for conflict. The air crackles with tension, and you feel the familiar rush of adrenaline coursing through your veins."
 	}
-
-	// Taking/grabbing actions
-	if strings.Contains(actionLower, "take") || strings.Contains(actionLower, "grab") || strings.Contains(actionLower, "pick") || strings.Contains(actionLower, "get") {
+	if e.isTakingAction(actionLower) {
 		return "You reach out carefully, your fingers closing around the object. A sense of acquisition fills you as you secure this new addition to your belongings."
 	}
-
-	// Speaking/communication actions
-	if strings.Contains(actionLower, "say") || strings.Contains(actionLower, "speak") || strings.Contains(actionLower, "talk") || strings.Contains(actionLower, "tell") {
+	if e.isCommunicationAction(actionLower) {
 		return "Your words hang in the air, carrying with them the weight of intention. Whether anyone is listening remains to be seen, but you have made your voice heard."
 	}
-
-	// Opening/unlocking actions
-	if strings.Contains(actionLower, "open") || strings.Contains(actionLower, "unlock") || strings.Contains(actionLower, "break") {
+	if e.isOpeningAction(actionLower) {
 		return "With determined effort, you work to overcome the obstacle before you. Progress is slow but steady, and you sense that your persistence will eventually pay off."
 	}
-
-	// Waiting/resting actions
-	if strings.Contains(actionLower, "wait") || strings.Contains(actionLower, "rest") || strings.Contains(actionLower, "pause") || strings.Contains(actionLower, "sit") {
+	if e.isRestingAction(actionLower) {
 		return "Time passes quietly as you pause in your journey. The world continues its ancient rhythms around you, and you feel a moment of peace amidst the uncertainty."
 	}
-
-	// Running/escaping actions
-	if strings.Contains(actionLower, "run") || strings.Contains(actionLower, "flee") || strings.Contains(actionLower, "escape") {
+	if e.isEscapeAction(actionLower) {
 		return "Your heart pounds as you move swiftly away from potential danger. The landscape blurs past you as survival instincts take over, guiding your hurried steps."
 	}
+	return ""
+}
 
-	// Default mystical response for unknown actions
+func (e *Engine) isMovementAction(action string) bool {
+	return strings.Contains(action, "go") || strings.Contains(action, "walk") || strings.Contains(action, "move") || strings.Contains(action, "head")
+}
+
+func (e *Engine) isObservationAction(action string) bool {
+	return strings.Contains(action, "look") || strings.Contains(action, "examine") || strings.Contains(action, "observe") || strings.Contains(action, "inspect")
+}
+
+func (e *Engine) isSearchAction(action string) bool {
+	return strings.Contains(action, "search") || strings.Contains(action, "find") || strings.Contains(action, "seek")
+}
+
+func (e *Engine) isCombatAction(action string) bool {
+	return strings.Contains(action, "attack") || strings.Contains(action, "fight") || strings.Contains(action, "strike") || strings.Contains(action, "hit")
+}
+
+func (e *Engine) isTakingAction(action string) bool {
+	return strings.Contains(action, "take") || strings.Contains(action, "grab") || strings.Contains(action, "pick") || strings.Contains(action, "get")
+}
+
+func (e *Engine) isCommunicationAction(action string) bool {
+	return strings.Contains(action, "say") || strings.Contains(action, "speak") || strings.Contains(action, "talk") || strings.Contains(action, "tell")
+}
+
+func (e *Engine) isOpeningAction(action string) bool {
+	return strings.Contains(action, "open") || strings.Contains(action, "unlock") || strings.Contains(action, "break")
+}
+
+func (e *Engine) isRestingAction(action string) bool {
+	return strings.Contains(action, "wait") || strings.Contains(action, "rest") || strings.Contains(action, "pause") || strings.Contains(action, "sit")
+}
+
+func (e *Engine) isEscapeAction(action string) bool {
+	return strings.Contains(action, "run") || strings.Contains(action, "flee") || strings.Contains(action, "escape")
+}
+
+func (e *Engine) getDefaultFallbackResponse(state *GameState) string {
 	fallbackResponses := []string{
 		"The fabric of reality ripples slightly in response to your action, though the full consequences remain hidden in the mists of time.",
 		"Something stirs in the unseen spaces around you. Your action has been noted by forces beyond immediate comprehension.",
