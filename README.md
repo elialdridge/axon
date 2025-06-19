@@ -49,6 +49,8 @@ Axon is a player-driven, prompt-based adventure game where AI models serve as yo
 
 ### Technical Features
 - **Cross-Platform**: Runs on Linux, macOS, Windows, and other Unix-like systems
+- **Universal Terminal Compatibility**: Works with minimal terminals and UNIX System V
+- **Automatic Terminal Detection**: Adapts interface based on terminal capabilities
 - **Monochrome Design**: Clean, terminal-friendly black and white interface
 - **Modular Architecture**: Clean separation of concerns for easy maintenance and extension
 - **Multiple AI Providers**: Support for OpenRouter and Gemini APIs
@@ -176,6 +178,26 @@ Game saves are stored as JSON files in `~/.axon/saves/`. Each save contains:
 - Player character and inventory
 - Full conversation history
 - Game metadata and timestamps
+
+### Terminal Compatibility
+
+Axon automatically detects and adapts to your terminal type:
+
+- **Modern Terminals**: Full features with color, mouse, and advanced formatting
+- **Minimal Terminals** (`dumb`, CI/CD): Plain text mode with essential functionality
+- **UNIX System V** (`vt100`, `vt220`): Compatible with legacy UNIX systems
+
+Use the included detection utility:
+```bash
+# Check your terminal capabilities
+./terminal-info
+
+# Test with different terminal types
+TERM=dumb ./axon          # Minimal mode
+TERM=vt100 ./axon         # System V mode
+```
+
+See [TERMINAL_COMPATIBILITY.md](TERMINAL_COMPATIBILITY.md) for detailed information.
 
 ## Development
 

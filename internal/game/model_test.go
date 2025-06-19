@@ -4,10 +4,27 @@ import (
 	"strings"
 	"testing"
 
-	"axon/internal/config"
-
 	tea "github.com/charmbracelet/bubbletea"
+
+	"axon/internal/config"
+	"axon/internal/terminal"
 )
+
+// Helper function to create test terminal info
+func createTestTerminalInfo() *terminal.TerminalInfo {
+	return &terminal.TerminalInfo{
+		Width:    80,
+		Height:   24,
+		TermType: "xterm-256color",
+		ColorSupport: true,
+		MouseSupport: true,
+		AltScreenSupport: true,
+		SupportsUTF8: true,
+		SupportsBold: true,
+		SupportsUnderline: true,
+		SupportsReverse: true,
+	}
+}
 
 func TestNewModel(t *testing.T) {
 	cfg := &config.Config{
@@ -24,7 +41,12 @@ func TestNewModel(t *testing.T) {
 		},
 	}
 
-	model := NewModel(cfg)
+	termInfo := &terminal.TerminalInfo{
+		Width:  80,
+		Height: 24,
+		TermType: "xterm-256color",
+	}
+	model := NewModel(cfg, termInfo)
 
 	if model == nil {
 		t.Fatal("NewModel returned nil")
@@ -65,7 +87,7 @@ func TestNewModel(t *testing.T) {
 
 func TestModelInit(t *testing.T) {
 	cfg := &config.Config{}
-	model := NewModel(cfg)
+	model := NewModel(cfg, createTestTerminalInfo())
 
 	cmd := model.Init()
 	if cmd != nil {
@@ -75,7 +97,7 @@ func TestModelInit(t *testing.T) {
 
 func TestModelWindowResize(t *testing.T) {
 	cfg := &config.Config{}
-	model := NewModel(cfg)
+	model := NewModel(cfg, createTestTerminalInfo())
 
 	// Test window resize
 	resizeMsg := tea.WindowSizeMsg{
@@ -100,7 +122,7 @@ func TestModelWindowResize(t *testing.T) {
 
 func TestModelKeyHandling(t *testing.T) {
 	cfg := &config.Config{}
-	model := NewModel(cfg)
+	model := NewModel(cfg, createTestTerminalInfo())
 
 	// Test character input
 	keyMsg := tea.KeyMsg{
@@ -136,7 +158,7 @@ func TestModelKeyHandling(t *testing.T) {
 
 func TestModelScrolling(t *testing.T) {
 	cfg := &config.Config{}
-	model := NewModel(cfg)
+	model := NewModel(cfg, createTestTerminalInfo())
 
 	// Test scroll up
 	model.scrollOffset = 5
@@ -172,7 +194,7 @@ func TestModelScrolling(t *testing.T) {
 
 func TestModelMainMenuNavigation(t *testing.T) {
 	cfg := &config.Config{}
-	model := NewModel(cfg)
+	model := NewModel(cfg, createTestTerminalInfo())
 
 	// Test new game selection
 	model.inputValue = "1"
@@ -197,7 +219,7 @@ func TestModelMainMenuNavigation(t *testing.T) {
 
 func TestModelQuitHandling(t *testing.T) {
 	cfg := &config.Config{}
-	model := NewModel(cfg)
+	model := NewModel(cfg, createTestTerminalInfo())
 
 	// Test quit key
 	quitMsg := tea.KeyMsg{
@@ -228,7 +250,7 @@ func TestModelViewRendering(t *testing.T) {
 			Height: 24,
 		},
 	}
-	model := NewModel(cfg)
+	model := NewModel(cfg, createTestTerminalInfo())
 
 	// Test main menu view
 	view := model.View()
@@ -298,7 +320,7 @@ func TestModelGameModes(t *testing.T) {
 
 func TestModelErrorHandling(t *testing.T) {
 	cfg := &config.Config{}
-	model := NewModel(cfg)
+	model := NewModel(cfg, createTestTerminalInfo())
 
 	// Test error message display
 	model.errorMessage = "Test error"
@@ -316,7 +338,7 @@ func TestModelErrorHandling(t *testing.T) {
 
 func TestModelLoadingState(t *testing.T) {
 	cfg := &config.Config{}
-	model := NewModel(cfg)
+	model := NewModel(cfg, createTestTerminalInfo())
 	model.mode = ModeWorldSetup
 
 	// Test loading state display

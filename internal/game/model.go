@@ -9,6 +9,7 @@ import (
 	"axon/internal/config"
 	"axon/internal/logger"
 	"axon/internal/storage"
+	"axon/internal/terminal"
 	"axon/internal/ui"
 )
 
@@ -27,6 +28,8 @@ const (
 type Model struct {
 	// Configuration
 	config *config.Config
+	// Terminal info
+	terminalInfo *terminal.TerminalInfo
 	// UI styles
 	styles *ui.Styles
 	// Game engine
@@ -50,16 +53,30 @@ type Model struct {
 }
 
 // NewModel creates a new game model
-func NewModel(cfg *config.Config) *Model {
+func NewModel(cfg *config.Config, termInfo *terminal.TerminalInfo) *Model {
+	// Choose appropriate styles based on terminal type
+	var styles *ui.Styles
+	if termInfo.IsMinimal {
+		styles = ui.NewMinimalStyles()
+		logger.Debug("Using minimal terminal styles")
+	} else if termInfo.IsSystemV {
+		styles = ui.NewSystemVStyles()
+		logger.Debug("Using System V terminal styles")
+	} else {
+		styles = ui.NewStyles()
+		logger.Debug("Using standard terminal styles")
+	}
+
 	return &Model{
-		config:    cfg,
-		styles:    ui.NewStyles(),
-		engine:    NewEngine(cfg),
-		storage:   storage.NewStorage(cfg.Game.SaveDir),
-		gameState: NewGameState(),
-		mode:      ModeMainMenu,
-		width:     cfg.Terminal.Width,
-		height:    cfg.Terminal.Height,
+		config:       cfg,
+		terminalInfo: termInfo,
+		styles:       styles,
+		engine:       NewEngine(cfg),
+		storage:      storage.NewStorage(cfg.Game.SaveDir),
+		gameState:    NewGameState(),
+		mode:         ModeMainMenu,
+		width:        cfg.Terminal.Width,
+		height:       cfg.Terminal.Height,
 	}
 }
 
@@ -341,10 +358,16 @@ func (m Model) renderGame() string {
 	// Render input panel
 	inputContent := m.renderInput()
 
-	// Simple ASCII separator line
-	separator := strings.Repeat("-", m.width)
+	// Simple ASCII separator line compatible with all terminals
+	separatorChar := "-"
+	if m.terminalInfo.IsMinimal || m.terminalInfo.IsSystemV {
+		separatorChar = "-" // Keep simple dash for maximum compatibility
+	}
+	separator := strings.Repeat(separatorChar, m.width)
 
-	return historyContent + "\n" + separator + "\n" + inputContent
+	// Format final output for terminal compatibility
+	finalContent := historyContent + "\n" + separator + "\n" + inputContent
+	return m.terminalInfo.FormatForTerminal(finalContent)
 }
 
 // renderHistory renders the game history

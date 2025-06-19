@@ -44,3 +44,35 @@ func NewStyles() *Styles {
 		Scrollbar: lipgloss.NewStyle(),
 	}
 }
+
+// NewMinimalStyles creates styles suitable for minimal terminals
+func NewMinimalStyles() *Styles {
+	return &Styles{
+		Base:          lipgloss.NewStyle(),
+		HistoryPanel:  lipgloss.NewStyle(),
+		InputPanel:    lipgloss.NewStyle(),
+		PlayerText:    lipgloss.NewStyle(),
+		NarratorText:  lipgloss.NewStyle(),
+		SystemText:    lipgloss.NewStyle(),
+		InventoryText: lipgloss.NewStyle(),
+		Border:        lipgloss.NewStyle(),
+		Prompt:        lipgloss.NewStyle(),
+		Scrollbar:     lipgloss.NewStyle(),
+	}
+}
+
+// NewSystemVStyles creates styles suitable for UNIX System V terminals
+func NewSystemVStyles() *Styles {
+	return &Styles{
+		Base:          lipgloss.NewStyle(),
+		HistoryPanel:  lipgloss.NewStyle(),
+		InputPanel:    lipgloss.NewStyle(),
+		PlayerText:    lipgloss.NewStyle(),
+		NarratorText:  lipgloss.NewStyle(),
+		SystemText:    lipgloss.NewStyle(),
+		InventoryText: lipgloss.NewStyle(),
+		Border:        lipgloss.NewStyle(),
+		Prompt:        lipgloss.NewStyle(),
+		Scrollbar:     lipgloss.NewStyle(),
+	}
+}

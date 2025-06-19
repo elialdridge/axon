@@ -18,9 +18,14 @@ type Config struct {
 
 // TerminalConfig contains terminal-specific settings
 type TerminalConfig struct {
-	Width        int  `json:"width"`
-	Height       int  `json:"height"`
-	ColorEnabled bool `json:"color_enabled"`
+	Width           int  `json:"width"`
+	Height          int  `json:"height"`
+	ColorEnabled    bool `json:"color_enabled"`
+	ForceMinimal    bool `json:"force_minimal"`
+	ForceSystemV    bool `json:"force_systemv"`
+	AutoDetect      bool `json:"auto_detect"`
+	MouseEnabled    bool `json:"mouse_enabled"`
+	AltScreenEnabled bool `json:"alt_screen_enabled"`
 }
 
 // AIConfig contains AI model settings
@@ -76,9 +81,14 @@ func defaultConfig() *Config {
 
 	return &Config{
 		Terminal: TerminalConfig{
-			Width:        80,
-			Height:       24,
-			ColorEnabled: false, // Monochrome by default
+			Width:           80,
+			Height:          24,
+			ColorEnabled:    false, // Monochrome by default
+			ForceMinimal:    false,
+			ForceSystemV:    false,
+			AutoDetect:      true,  // Enable auto-detection by default
+			MouseEnabled:    true,  // Will be disabled for incompatible terminals
+			AltScreenEnabled: true,  // Will be disabled for incompatible terminals
 		},
 		AI: AIConfig{
 			OpenRouterAPIKey: os.Getenv("OPENROUTER_API_KEY"),
