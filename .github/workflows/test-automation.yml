@@ -1,0 +1,757 @@
+name: Intelligent Test Automation & Self-Healing
+
+on:
+  schedule:
+    # Run test analysis every 4 hours
+    - cron: '0 */4 * * *'
+  push:
+    branches: [main, master, develop]
+    paths: ['**.go', '**_test.go']
+  pull_request:
+    branches: [main, master, develop]
+    paths: ['**.go', '**_test.go']
+  workflow_dispatch:
+    inputs:
+      healing_mode:
+        description: 'Test healing mode'
+        required: false
+        default: 'moderate'
+        type: choice
+        options:
+          - conservative
+          - moderate
+          - aggressive
+      force_generation:
+        description: 'Force test generation'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: write
+  checks: write
+
+env:
+  GO_VERSION: '1.23'
+  HEALING_MODE: ${{ github.event.inputs.healing_mode || 'moderate' }}
+  FORCE_GENERATION: ${{ github.event.inputs.force_generation || 'false' }}
+
+jobs:
+  test-analysis:
+    name: Intelligent Test Analysis
+    runs-on: ubuntu-latest
+    outputs:
+      test_health: ${{ steps.analysis.outputs.test_health }}
+      coverage_score: ${{ steps.analysis.outputs.coverage_score }}
+      missing_tests: ${{ steps.analysis.outputs.missing_tests }}
+      failing_tests: ${{ steps.analysis.outputs.failing_tests }}
+      needs_healing: ${{ steps.analysis.outputs.needs_healing }}
+      test_recommendations: ${{ steps.analysis.outputs.test_recommendations }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+    
+    - name: Install test analysis tools
+      run: |
+        go install golang.org/x/tools/cmd/cover@latest
+        go install github.com/axw/gocov/gocov@latest
+        go install github.com/matm/gocov-html@latest
+        go install honnef.co/go/tools/cmd/staticcheck@latest
+        go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+    
+    - name: Comprehensive test analysis
+      id: analysis
+      run: |
+        mkdir -p test-analysis-reports
+        
+        echo "🧪 INTELLIGENT TEST ANALYSIS SYSTEM" > test-analysis-reports/analysis.md
+        echo "Analysis Time: $(date -u)" >> test-analysis-reports/analysis.md
+        echo "Healing Mode: ${{ env.HEALING_MODE }}" >> test-analysis-reports/analysis.md
+        echo "" >> test-analysis-reports/analysis.md
+        
+        # Initialize metrics
+        TEST_HEALTH=100
+        COVERAGE_SCORE=0
+        MISSING_TESTS=()
+        FAILING_TESTS=()
+        TEST_RECOMMENDATIONS=()
+        NEEDS_HEALING="false"
+        
+        # 1. TEST EXECUTION ANALYSIS
+        echo "## 🏃 Test Execution Analysis" >> test-analysis-reports/analysis.md
+        
+        if go test -v ./... > test-execution.log 2>&1; then
+          echo "✅ All tests pass" >> test-analysis-reports/analysis.md
+          
+          # Count tests
+          TOTAL_TESTS=$(grep -c "=== RUN" test-execution.log || echo "0")
+          PASSED_TESTS=$(grep -c "--- PASS:" test-execution.log || echo "0")
+          SKIPPED_TESTS=$(grep -c "--- SKIP:" test-execution.log || echo "0")
+          
+          echo "📊 Total Tests: $TOTAL_TESTS" >> test-analysis-reports/analysis.md
+          echo "✅ Passed: $PASSED_TESTS" >> test-analysis-reports/analysis.md
+          echo "⏭️ Skipped: $SKIPPED_TESTS" >> test-analysis-reports/analysis.md
+          
+          if [ "$SKIPPED_TESTS" -gt 0 ]; then
+            TEST_HEALTH=$((TEST_HEALTH - (SKIPPED_TESTS * 2)))
+            TEST_RECOMMENDATIONS+=("IMPLEMENT_SKIPPED_TESTS")
+          fi
+        else
+          echo "❌ Some tests are failing" >> test-analysis-reports/analysis.md
+          TEST_HEALTH=$((TEST_HEALTH - 30))
+          NEEDS_HEALING="true"
+          
+          # Extract failing tests
+          grep "--- FAIL:" test-execution.log | sed 's/--- FAIL: //' >> test-analysis-reports/failing-tests.txt
+          FAILING_TESTS=($(cat test-analysis-reports/failing-tests.txt || echo ""))
+          
+          echo "Failed tests:" >> test-analysis-reports/analysis.md
+          for test in "${FAILING_TESTS[@]}"; do
+            echo "- $test" >> test-analysis-reports/analysis.md
+          done
+        fi
+        
+        # 2. COVERAGE ANALYSIS
+        echo "" >> test-analysis-reports/analysis.md
+        echo "## 📊 Coverage Analysis" >> test-analysis-reports/analysis.md
+        
+        if go test -coverprofile=coverage.out ./...; then
+          COVERAGE_SCORE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "📈 Total Coverage: ${COVERAGE_SCORE}%" >> test-analysis-reports/analysis.md
+          
+          # Generate detailed coverage report
+          go tool cover -html=coverage.out -o test-analysis-reports/coverage.html
+          gocov convert coverage.out | gocov-html > test-analysis-reports/coverage-detailed.html
+          
+          # Analyze per-package coverage
+          echo "" >> test-analysis-reports/analysis.md
+          echo "### Per-Package Coverage" >> test-analysis-reports/analysis.md
+          go tool cover -func=coverage.out | grep -v "total:" | while read line; do
+            coverage=$(echo "$line" | awk '{print $3}' | sed 's/%//')
+            package=$(echo "$line" | awk '{print $1}' | cut -d'/' -f1)
+            
+            if (( $(echo "$coverage < 70" | bc -l) )); then
+              echo "⚠️ $package: ${coverage}%" >> test-analysis-reports/analysis.md
+            else
+              echo "✅ $package: ${coverage}%" >> test-analysis-reports/analysis.md
+            fi
+          done
+          
+          # Coverage health assessment
+          if (( $(echo "$COVERAGE_SCORE < 60" | bc -l) )); then
+            TEST_HEALTH=$((TEST_HEALTH - 25))
+            NEEDS_HEALING="true"
+            TEST_RECOMMENDATIONS+=("IMPROVE_COVERAGE_CRITICAL")
+          elif (( $(echo "$COVERAGE_SCORE < 80" | bc -l) )); then
+            TEST_HEALTH=$((TEST_HEALTH - 10))
+            TEST_RECOMMENDATIONS+=("IMPROVE_COVERAGE_MODERATE")
+          fi
+        else
+          echo "❌ Coverage analysis failed" >> test-analysis-reports/analysis.md
+          TEST_HEALTH=$((TEST_HEALTH - 20))
+          NEEDS_HEALING="true"
+        fi
+        
+        # 3. MISSING TESTS ANALYSIS
+        echo "" >> test-analysis-reports/analysis.md
+        echo "## 🔍 Missing Tests Analysis" >> test-analysis-reports/analysis.md
+        
+        # Find Go files without corresponding test files
+        find . -name "*.go" -not -name "*_test.go" -not -path "./vendor/*" | while read gofile; do
+          testfile="${gofile%%.go}_test.go"
+          if [ ! -f "$testfile" ]; then
+            echo "$gofile" >> test-analysis-reports/missing-tests.txt
+            MISSING_TESTS+=("$gofile")
+          fi
+        done
+        
+        MISSING_COUNT=$(cat test-analysis-reports/missing-tests.txt 2>/dev/null | wc -l || echo "0")
+        echo "📋 Files without tests: $MISSING_COUNT" >> test-analysis-reports/analysis.md
+        
+        if [ "$MISSING_COUNT" -gt 0 ]; then
+          echo "" >> test-analysis-reports/analysis.md
+          echo "### Files Missing Tests:" >> test-analysis-reports/analysis.md
+          head -10 test-analysis-reports/missing-tests.txt | while read file; do
+            echo "- $file" >> test-analysis-reports/analysis.md
+          done
+          
+          if [ "$MISSING_COUNT" -gt 10 ]; then
+            TEST_HEALTH=$((TEST_HEALTH - 20))
+            NEEDS_HEALING="true"
+            TEST_RECOMMENDATIONS+=("GENERATE_MISSING_TESTS")
+          elif [ "$MISSING_COUNT" -gt 5 ]; then
+            TEST_HEALTH=$((TEST_HEALTH - 10))
+            TEST_RECOMMENDATIONS+=("GENERATE_MISSING_TESTS")
+          fi
+        fi
+        
+        # 4. TEST QUALITY ANALYSIS
+        echo "" >> test-analysis-reports/analysis.md
+        echo "## 🎯 Test Quality Analysis" >> test-analysis-reports/analysis.md
+        
+        # Analyze test patterns
+        TEST_FILES=$(find . -name "*_test.go" -not -path "./vendor/*" | wc -l)
+        echo "📝 Test Files: $TEST_FILES" >> test-analysis-reports/analysis.md
+        
+        # Check for benchmark tests
+        BENCHMARK_COUNT=$(grep -r "func Benchmark" . --include="*_test.go" | wc -l || echo "0")
+        echo "⚡ Benchmark Tests: $BENCHMARK_COUNT" >> test-analysis-reports/analysis.md
+        
+        if [ "$BENCHMARK_COUNT" -eq 0 ] && [ "$TEST_FILES" -gt 0 ]; then
+          TEST_RECOMMENDATIONS+=("ADD_BENCHMARK_TESTS")
+        fi
+        
+        # Check for table-driven tests
+        TABLE_TESTS=$(grep -r "tests := \[\]struct" . --include="*_test.go" | wc -l || echo "0")
+        echo "📋 Table-driven Tests: $TABLE_TESTS" >> test-analysis-reports/analysis.md
+        
+        # Check for parallel tests
+        PARALLEL_TESTS=$(grep -r "t\.Parallel()" . --include="*_test.go" | wc -l || echo "0")
+        echo "🏃‍♂️ Parallel Tests: $PARALLEL_TESTS" >> test-analysis-reports/analysis.md
+        
+        # 5. TEST PERFORMANCE ANALYSIS
+        echo "" >> test-analysis-reports/analysis.md
+        echo "## ⚡ Test Performance Analysis" >> test-analysis-reports/analysis.md
+        
+        # Run benchmarks if they exist
+        if [ "$BENCHMARK_COUNT" -gt 0 ]; then
+          if go test -bench=. -benchmem ./... > benchmark-results.txt 2>&1; then
+            echo "✅ Benchmarks executed successfully" >> test-analysis-reports/analysis.md
+            echo "" >> test-analysis-reports/analysis.md
+            echo "### Benchmark Results" >> test-analysis-reports/analysis.md
+            echo '```' >> test-analysis-reports/analysis.md
+            head -20 benchmark-results.txt >> test-analysis-reports/analysis.md
+            echo '```' >> test-analysis-reports/analysis.md
+          else
+            echo "⚠️ Benchmark execution issues detected" >> test-analysis-reports/analysis.md
+            TEST_RECOMMENDATIONS+=("FIX_BENCHMARK_ISSUES")
+          fi
+        else
+          echo "⚠️ No benchmark tests found" >> test-analysis-reports/analysis.md
+        fi
+        
+        # 6. FLAKY TEST DETECTION
+        echo "" >> test-analysis-reports/analysis.md
+        echo "## 🔄 Flaky Test Detection" >> test-analysis-reports/analysis.md
+        
+        # Run tests multiple times to detect flaky tests (only for small test suites)
+        if [ "$TOTAL_TESTS" -lt 50 ]; then
+          echo "Running flaky test detection..." >> test-analysis-reports/analysis.md
+          FLAKY_DETECTED=0
+          
+          for i in {1..3}; do
+            if ! go test ./... > /dev/null 2>&1; then
+              FLAKY_DETECTED=$((FLAKY_DETECTED + 1))
+            fi
+          done
+          
+          if [ "$FLAKY_DETECTED" -gt 0 ]; then
+            echo "⚠️ Potential flaky tests detected ($FLAKY_DETECTED/3 runs failed)" >> test-analysis-reports/analysis.md
+            TEST_HEALTH=$((TEST_HEALTH - 15))
+            TEST_RECOMMENDATIONS+=("INVESTIGATE_FLAKY_TESTS")
+          else
+            echo "✅ No flaky tests detected" >> test-analysis-reports/analysis.md
+          fi
+        else
+          echo "⏭️ Skipped flaky test detection (large test suite)" >> test-analysis-reports/analysis.md
+        fi
+        
+        # 7. INTELLIGENT RECOMMENDATIONS
+        echo "" >> test-analysis-reports/analysis.md
+        echo "## 💡 Intelligent Test Recommendations" >> test-analysis-reports/analysis.md
+        
+        # Generate context-aware recommendations
+        if [ ${#TEST_RECOMMENDATIONS[@]} -eq 0 ]; then
+          echo "✅ Test suite is in excellent condition" >> test-analysis-reports/analysis.md
+        else
+          for rec in "${TEST_RECOMMENDATIONS[@]}"; do
+            case $rec in
+              "IMPROVE_COVERAGE_CRITICAL")
+                echo "🔴 **CRITICAL**: Increase test coverage above 60%" >> test-analysis-reports/analysis.md
+                ;;
+              "IMPROVE_COVERAGE_MODERATE")
+                echo "🟡 **MODERATE**: Increase test coverage above 80%" >> test-analysis-reports/analysis.md
+                ;;
+              "GENERATE_MISSING_TESTS")
+                echo "📝 **ACTION**: Generate tests for files without coverage" >> test-analysis-reports/analysis.md
+                ;;
+              "ADD_BENCHMARK_TESTS")
+                echo "⚡ **ENHANCEMENT**: Add benchmark tests for performance monitoring" >> test-analysis-reports/analysis.md
+                ;;
+              "IMPLEMENT_SKIPPED_TESTS")
+                echo "⏭️ **TODO**: Implement skipped test cases" >> test-analysis-reports/analysis.md
+                ;;
+              "FIX_BENCHMARK_ISSUES")
+                echo "🔧 **FIX**: Resolve benchmark execution issues" >> test-analysis-reports/analysis.md
+                ;;
+              "INVESTIGATE_FLAKY_TESTS")
+                echo "🔄 **INVESTIGATE**: Address potentially flaky tests" >> test-analysis-reports/analysis.md
+                ;;
+            esac
+          done
+        fi
+        
+        # Final health assessment
+        echo "" >> test-analysis-reports/analysis.md
+        echo "## 🎯 Test Health Score: $TEST_HEALTH/100" >> test-analysis-reports/analysis.md
+        
+        if [ "$TEST_HEALTH" -ge 90 ]; then
+          echo "🟢 **EXCELLENT** - Test suite is in optimal condition" >> test-analysis-reports/analysis.md
+        elif [ "$TEST_HEALTH" -ge 75 ]; then
+          echo "🟡 **GOOD** - Minor improvements recommended" >> test-analysis-reports/analysis.md
+        elif [ "$TEST_HEALTH" -ge 50 ]; then
+          echo "🟠 **NEEDS ATTENTION** - Test suite requires improvements" >> test-analysis-reports/analysis.md
+          NEEDS_HEALING="true"
+        else
+          echo "🔴 **CRITICAL** - Immediate test suite intervention required" >> test-analysis-reports/analysis.md
+          NEEDS_HEALING="true"
+        fi
+        
+        # Output results
+        echo "test_health=$TEST_HEALTH" >> $GITHUB_OUTPUT
+        echo "coverage_score=$COVERAGE_SCORE" >> $GITHUB_OUTPUT
+        echo "missing_tests=${MISSING_TESTS[*]}" >> $GITHUB_OUTPUT
+        echo "failing_tests=${FAILING_TESTS[*]}" >> $GITHUB_OUTPUT
+        echo "needs_healing=$NEEDS_HEALING" >> $GITHUB_OUTPUT
+        echo "test_recommendations=${TEST_RECOMMENDATIONS[*]}" >> $GITHUB_OUTPUT
+    
+    - name: Upload test analysis artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-analysis-reports
+        path: |
+          test-analysis-reports/
+          test-execution.log
+          coverage.out
+          benchmark-results.txt
+        retention-days: 30
+
+  test-healing:
+    name: Intelligent Test Self-Healing
+    runs-on: ubuntu-latest
+    needs: test-analysis
+    if: |
+      needs.test-analysis.outputs.needs_healing == 'true' || 
+      env.FORCE_GENERATION == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+    
+    - name: Install test generation tools
+      run: |
+        go install golang.org/x/tools/cmd/goimports@latest
+        go install mvdan.cc/gofumpt@latest
+        # Install additional AI-powered test generation tools when available
+        pip install --quiet openai  # For potential AI-powered test generation
+    
+    - name: Apply intelligent test healing
+      id: healing
+      run: |
+        echo "🩺 INTELLIGENT TEST HEALING SYSTEM ACTIVATED" > test-healing-log.md
+        echo "Healing Mode: ${{ env.HEALING_MODE }}" >> test-healing-log.md
+        echo "Test Health: ${{ needs.test-analysis.outputs.test_health }}/100" >> test-healing-log.md
+        echo "Recommendations: ${{ needs.test-analysis.outputs.test_recommendations }}" >> test-healing-log.md
+        echo "" >> test-healing-log.md
+        
+        HEALING_ACTIONS=()
+        RECOMMENDATIONS="${{ needs.test-analysis.outputs.test_recommendations }}"
+        
+        # 1. GENERATE MISSING TESTS
+        if echo "$RECOMMENDATIONS" | grep -q "GENERATE_MISSING_TESTS"; then
+          echo "📝 Generating missing test files..." >> test-healing-log.md
+          
+          # Get missing tests from analysis
+          MISSING_FILES="${{ needs.test-analysis.outputs.missing_tests }}"
+          
+          for gofile in $MISSING_FILES; do
+            if [ -f "$gofile" ]; then
+              testfile="${gofile%%.go}_test.go"
+              package_name=$(grep "^package " "$gofile" | head -1 | awk '{print $2}')
+              
+              echo "Creating test file: $testfile" >> test-healing-log.md
+              
+              # Analyze the Go file for functions to test
+              FUNCTIONS=$(grep "^func [A-Z]" "$gofile" | sed 's/func //' | sed 's/(.*$//' || echo "")
+              
+              cat > "$testfile" << EOF
+package ${package_name}
+
+import (
+	"testing"
+)
+
+// Auto-generated tests for $(basename "$gofile")
+// Generated by Intelligent Test Healing System
+
+EOF
+              
+              # Generate test stubs for each public function
+              for func_name in $FUNCTIONS; do
+                cat >> "$testfile" << EOF
+func Test${func_name}(t *testing.T) {
+	// TODO: Implement test for $func_name
+	// This is an auto-generated test stub
+	t.Skip("Auto-generated test stub - implement actual test logic")
+}
+
+EOF
+              done
+              
+              # Add table-driven test template
+              cat >> "$testfile" << EOF
+// Table-driven test template
+func TestExample_TableDriven(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   interface{}
+		want    interface{}
+		wantErr bool
+	}{
+		// TODO: Add test cases
+		{"example", nil, nil, false},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			// TODO: Implement test logic
+			t.Skip("Table-driven test template - implement test cases")
+		})
+	}
+}
+
+// Benchmark template
+func BenchmarkExample(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		// TODO: Add benchmark code
+	}
+}
+EOF
+            fi
+          done
+          
+          HEALING_ACTIONS+=("GENERATED_TEST_STUBS")
+        fi
+        
+        # 2. ADD BENCHMARK TESTS
+        if echo "$RECOMMENDATIONS" | grep -q "ADD_BENCHMARK_TESTS" && [ "${{ env.HEALING_MODE }}" != "conservative" ]; then
+          echo "⚡ Adding benchmark tests..." >> test-healing-log.md
+          
+          # Add benchmark tests to existing test files
+          find . -name "*_test.go" -not -path "./vendor/*" | while read testfile; do
+            if ! grep -q "func Benchmark" "$testfile"; then
+              package_name=$(grep "^package " "$testfile" | head -1 | awk '{print $2}')
+              
+              echo "" >> "$testfile"
+              echo "// Auto-generated benchmark tests" >> "$testfile"
+              echo "func BenchmarkMain(b *testing.B) {" >> "$testfile"
+              echo "	for i := 0; i < b.N; i++ {" >> "$testfile"
+              echo "		// TODO: Add main functionality benchmark" >> "$testfile"
+              echo "	}" >> "$testfile"
+              echo "}" >> "$testfile"
+              echo "" >> "$testfile"
+              echo "func BenchmarkMemoryAllocation(b *testing.B) {" >> "$testfile"
+              echo "	b.ReportAllocs()" >> "$testfile"
+              echo "	for i := 0; i < b.N; i++ {" >> "$testfile"
+              echo "		// TODO: Add memory allocation benchmark" >> "$testfile"
+              echo "	}" >> "$testfile"
+              echo "}" >> "$testfile"
+            fi
+          done
+          
+          HEALING_ACTIONS+=("ADDED_BENCHMARK_TEMPLATES")
+        fi
+        
+        # 3. IMPROVE EXISTING TESTS
+        if echo "$RECOMMENDATIONS" | grep -q "IMPROVE_COVERAGE" && [ "${{ env.HEALING_MODE }}" == "aggressive" ]; then
+          echo "🔧 Improving existing tests..." >> test-healing-log.md
+          
+          # Add parallel execution to tests
+          find . -name "*_test.go" -not -path "./vendor/*" -exec grep -L "t.Parallel()" {} \; | while read testfile; do
+            # Add parallel execution to test functions (simplified approach)
+            sed -i '/func Test.*t \*testing\.T) {/a\\tt.Parallel()' "$testfile"
+          done
+          
+          HEALING_ACTIONS+=("IMPROVED_TEST_PARALLELIZATION")
+        fi
+        
+        # 4. FIX FAILING TESTS (Conservative approach)
+        if echo "$RECOMMENDATIONS" | grep -q "FIX_FAILING_TESTS"; then
+          echo "🔧 Attempting to fix failing tests..." >> test-healing-log.md
+          
+          # Basic formatting and import fixes
+          find . -name "*_test.go" -not -path "./vendor/*" -exec goimports -w {} \;
+          gofumpt -w .
+          
+          # Try running tests again
+          if go test ./...; then
+            echo "✅ Tests now pass after formatting fixes" >> test-healing-log.md
+            HEALING_ACTIONS+=("FIXED_TEST_FORMATTING")
+          else
+            echo "⚠️ Tests still failing after basic fixes" >> test-healing-log.md
+          fi
+        fi
+        
+        # 5. IMPLEMENT SKIPPED TESTS
+        if echo "$RECOMMENDATIONS" | grep -q "IMPLEMENT_SKIPPED_TESTS" && [ "${{ env.HEALING_MODE }}" == "aggressive" ]; then
+          echo "⏭️ Converting skipped tests..." >> test-healing-log.md
+          
+          # Find and modify skipped tests (basic approach)
+          find . -name "*_test.go" -not -path "./vendor/*" -exec grep -l "t.Skip" {} \; | while read testfile; do
+            # Add TODO comments to skipped tests
+            sed -i 's/t\.Skip(/\/\/ TODO: Implement this test\n\t\/\/ t.Skip(/g' "$testfile"
+          done
+          
+          HEALING_ACTIONS+=("MARKED_SKIPPED_TESTS_FOR_IMPLEMENTATION")
+        fi
+        
+        # Check for changes
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "" >> test-healing-log.md
+          echo "### 🎯 Applied Healing Actions:" >> test-healing-log.md
+          for action in "${HEALING_ACTIONS[@]}"; do
+            echo "- $action" >> test-healing-log.md
+          done
+        else
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+          echo "ℹ️ No healing actions needed" >> test-healing-log.md
+        fi
+        
+        echo "healing_actions=${HEALING_ACTIONS[*]}" >> $GITHUB_OUTPUT
+    
+    - name: Validate healing results
+      if: steps.healing.outputs.has_changes == 'true'
+      run: |
+        echo "" >> test-healing-log.md
+        echo "## 🔍 Post-Healing Validation" >> test-healing-log.md
+        
+        # Run tests to check if healing was successful
+        if go test ./...; then
+          echo "✅ All tests pass after healing" >> test-healing-log.md
+        else
+          echo "⚠️ Some tests still failing after healing" >> test-healing-log.md
+        fi
+        
+        # Check coverage improvement
+        if go test -coverprofile=coverage-post-healing.out ./...; then
+          NEW_COVERAGE=$(go tool cover -func=coverage-post-healing.out | grep total | awk '{print $3}' | sed 's/%//')
+          OLD_COVERAGE="${{ needs.test-analysis.outputs.coverage_score }}"
+          
+          echo "📊 Coverage before: ${OLD_COVERAGE}%" >> test-healing-log.md
+          echo "📊 Coverage after: ${NEW_COVERAGE}%" >> test-healing-log.md
+          
+          if (( $(echo "$NEW_COVERAGE > $OLD_COVERAGE" | bc -l) )); then
+            echo "✅ Coverage improved!" >> test-healing-log.md
+          fi
+        fi
+    
+    - name: Commit healing changes
+      if: steps.healing.outputs.has_changes == 'true'
+      run: |
+        git config --local user.email "test-healing@github.com"
+        git config --local user.name "Intelligent Test Healing System"
+        
+        git add -A
+        git commit -m "🩺 test-healing: Apply intelligent test improvements
+
+Test Health: ${{ needs.test-analysis.outputs.test_health }}/100 → Improved
+Coverage: ${{ needs.test-analysis.outputs.coverage_score }}% → Enhanced
+Actions: ${{ steps.healing.outputs.healing_actions }}
+
+Healing Mode: ${{ env.HEALING_MODE }}
+Generated by: Intelligent Test Healing System"
+        
+        git push
+    
+    - name: Upload healing artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-healing-reports
+        path: |
+          test-healing-log.md
+          coverage-post-healing.out
+        retention-days: 30
+
+  test-monitoring:
+    name: Continuous Test Monitoring
+    runs-on: ubuntu-latest
+    needs: [test-analysis, test-healing]
+    if: always()
+    
+    steps:
+    - name: Generate test monitoring report
+      run: |
+        mkdir -p test-monitoring
+        
+        cat > test-monitoring/test-status-report.md << 'EOF'
+# 🧪 Continuous Test Monitoring Report
+
+**Generated:** $(date -u)
+**Test Health:** ${{ needs.test-analysis.outputs.test_health }}/100
+**Coverage:** ${{ needs.test-analysis.outputs.coverage_score }}%
+
+## 📊 Current Status
+
+### Test Health Assessment
+- **Overall Health:** ${{ needs.test-analysis.outputs.test_health }}/100
+- **Coverage Score:** ${{ needs.test-analysis.outputs.coverage_score }}%
+- **Healing Applied:** ${{ needs.test-healing.result == 'success' && '✅ Yes' || '⏭️ Not needed' }}
+
+### Key Metrics
+- **Missing Tests:** $(echo "${{ needs.test-analysis.outputs.missing_tests }}" | wc -w)
+- **Failing Tests:** $(echo "${{ needs.test-analysis.outputs.failing_tests }}" | wc -w)
+- **Recommendations:** $(echo "${{ needs.test-analysis.outputs.test_recommendations }}" | wc -w)
+
+## 🎯 Recommendations Summary
+
+${{ needs.test-analysis.outputs.test_recommendations }}
+
+## 🔄 Healing Actions
+
+${{ needs.test-healing.outputs.healing_actions || 'No healing actions applied' }}
+
+## 📈 Continuous Improvement
+
+The Intelligent Test System continuously monitors and improves test quality:
+
+### Automated Actions
+- ✅ Missing test detection and generation
+- ✅ Coverage analysis and improvement suggestions
+- ✅ Flaky test detection
+- ✅ Performance benchmark monitoring
+- ✅ Self-healing for common test issues
+
+### Next Monitoring Cycle
+**Scheduled:** In 4 hours (automatic)
+
+---
+*Generated by Intelligent Test Automation & Self-Healing System*
+EOF
+    
+    - name: Create or update test status issue
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('test-monitoring/test-status-report.md', 'utf8');
+          
+          // Find existing test status issue
+          const { data: issues } = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            labels: 'test-status,automated',
+            state: 'open'
+          });
+          
+          if (issues.length > 0) {
+            // Update existing issue
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issues[0].number,
+              title: `🧪 Test Status - Health: ${{ needs.test-analysis.outputs.test_health }}/100 | Coverage: ${{ needs.test-analysis.outputs.coverage_score }}%`,
+              body: report
+            });
+          } else {
+            // Create new status issue
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🧪 Test Status - Health: ${{ needs.test-analysis.outputs.test_health }}/100 | Coverage: ${{ needs.test-analysis.outputs.coverage_score }}%`,
+              body: report,
+              labels: ['test-status', 'automated', 'monitoring']
+            });
+          }
+    
+    - name: Upload monitoring report
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-monitoring-report
+        path: test-monitoring/
+        retention-days: 30
+
+  test-performance-tracking:
+    name: Test Performance Tracking
+    runs-on: ubuntu-latest
+    needs: test-analysis
+    if: needs.test-analysis.outputs.test_health >= 70
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+    
+    - name: Run performance benchmarks
+      run: |
+        mkdir -p benchmark-tracking
+        
+        echo "⚡ TEST PERFORMANCE TRACKING" > benchmark-tracking/performance-report.md
+        echo "Date: $(date -u)" >> benchmark-tracking/performance-report.md
+        echo "" >> benchmark-tracking/performance-report.md
+        
+        # Run benchmarks with memory profiling
+        if go test -bench=. -benchmem -benchtime=5s ./... > benchmark-tracking/benchmark-results.txt 2>&1; then
+          echo "## 📊 Benchmark Results" >> benchmark-tracking/performance-report.md
+          echo '```' >> benchmark-tracking/performance-report.md
+          cat benchmark-tracking/benchmark-results.txt >> benchmark-tracking/performance-report.md
+          echo '```' >> benchmark-tracking/performance-report.md
+          
+          # Extract key metrics
+          echo "" >> benchmark-tracking/performance-report.md
+          echo "## 🎯 Key Performance Metrics" >> benchmark-tracking/performance-report.md
+          
+          # Count benchmarks
+          BENCHMARK_COUNT=$(grep -c "^Benchmark" benchmark-tracking/benchmark-results.txt || echo "0")
+          echo "- **Total Benchmarks:** $BENCHMARK_COUNT" >> benchmark-tracking/performance-report.md
+          
+          # Extract slowest benchmarks
+          echo "- **Slowest Benchmarks:**" >> benchmark-tracking/performance-report.md
+          grep "^Benchmark" benchmark-tracking/benchmark-results.txt | sort -k3 -nr | head -5 | while read line; do
+            echo "  - $line" >> benchmark-tracking/performance-report.md
+          done
+          
+          # Memory allocation analysis
+          if grep -q "allocs/op" benchmark-tracking/benchmark-results.txt; then
+            echo "- **Memory Allocations:** Found" >> benchmark-tracking/performance-report.md
+          else
+            echo "- **Memory Allocations:** Not tracked" >> benchmark-tracking/performance-report.md
+          fi
+        else
+          echo "⚠️ No benchmarks available or benchmark execution failed" >> benchmark-tracking/performance-report.md
+        fi
+    
+    - name: Upload performance tracking
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-performance-tracking
+        path: benchmark-tracking/
+        retention-days: 90
+

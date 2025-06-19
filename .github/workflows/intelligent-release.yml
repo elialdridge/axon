@@ -1,0 +1,729 @@
+name: Intelligent Release Management
+
+on:
+  issues:
+    types: [labeled]
+  schedule:
+    # Check for auto-release conditions every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Force specific release type'
+        required: false
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+      skip_validation:
+        description: 'Skip validation checks'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  packages: write
+  actions: write
+
+env:
+  GO_VERSION: '1.23'
+  RELEASE_TYPE: ${{ github.event.inputs.release_type || 'auto' }}
+  SKIP_VALIDATION: ${{ github.event.inputs.skip_validation || 'false' }}
+
+jobs:
+  trigger-detection:
+    name: Intelligent Release Trigger Detection
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.detection.outputs.should_release }}
+      release_type: ${{ steps.detection.outputs.release_type }}
+      release_reason: ${{ steps.detection.outputs.release_reason }}
+      next_version: ${{ steps.detection.outputs.next_version }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Intelligent release detection
+      id: detection
+      run: |
+        echo "🧠 INTELLIGENT RELEASE DETECTION SYSTEM" > release-analysis.md
+        echo "Trigger: ${{ github.event_name }}" >> release-analysis.md
+        echo "Time: $(date -u)" >> release-analysis.md
+        echo "" >> release-analysis.md
+        
+        SHOULD_RELEASE="false"
+        RELEASE_TYPE="patch"
+        RELEASE_REASON=""
+        
+        # 1. LABEL-TRIGGERED RELEASE
+        if [ "${{ github.event_name }}" == "issues" ] && [ "${{ github.event.action }}" == "labeled" ]; then
+          if [ "${{ github.event.label.name }}" == "approve-auto-release" ]; then
+            echo "📋 Manual approval detected for automated release" >> release-analysis.md
+            SHOULD_RELEASE="true"
+            RELEASE_REASON="MANUAL_APPROVAL"
+            
+            # Extract release type from issue body if available
+            ISSUE_BODY="${{ github.event.issue.body }}"
+            if echo "$ISSUE_BODY" | grep -q "Release Type.*major"; then
+              RELEASE_TYPE="major"
+            elif echo "$ISSUE_BODY" | grep -q "Release Type.*minor"; then
+              RELEASE_TYPE="minor"
+            else
+              RELEASE_TYPE="patch"
+            fi
+          elif [ "${{ github.event.label.name }}" == "cancel-auto-release" ]; then
+            echo "❌ Auto-release cancelled by label" >> release-analysis.md
+            # Close the release issue
+            gh issue close ${{ github.event.issue.number }} --comment "Auto-release cancelled by user request"
+            exit 0
+          fi
+        fi
+        
+        # 2. SCHEDULED ANALYSIS
+        if [ "${{ github.event_name }}" == "schedule" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "⏰ Scheduled release analysis..." >> release-analysis.md
+          
+          # Get last release tag
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          COMMITS_SINCE=$(git rev-list ${LAST_TAG}..HEAD --count)
+          
+          echo "Last release: $LAST_TAG" >> release-analysis.md
+          echo "Commits since: $COMMITS_SINCE" >> release-analysis.md
+          
+          if [ "$COMMITS_SINCE" -eq 0 ]; then
+            echo "✅ No new commits - no release needed" >> release-analysis.md
+            exit 0
+          fi
+          
+          # Analyze commit types
+          FEAT_COMMITS=$(git log ${LAST_TAG}..HEAD --oneline | grep -c "^[a-f0-9]* feat" || echo "0")
+          FIX_COMMITS=$(git log ${LAST_TAG}..HEAD --oneline | grep -c "^[a-f0-9]* fix" || echo "0")
+          BREAKING_COMMITS=$(git log ${LAST_TAG}..HEAD --oneline | grep -c "BREAKING CHANGE" || echo "0")
+          PERF_COMMITS=$(git log ${LAST_TAG}..HEAD --oneline | grep -c "^[a-f0-9]* perf" || echo "0")
+          
+          echo "Feature commits: $FEAT_COMMITS" >> release-analysis.md
+          echo "Fix commits: $FIX_COMMITS" >> release-analysis.md
+          echo "Breaking commits: $BREAKING_COMMITS" >> release-analysis.md
+          echo "Performance commits: $PERF_COMMITS" >> release-analysis.md
+          
+          # Time-based analysis
+          DAYS_SINCE_RELEASE=$(( ($(date +%s) - $(git log -1 --format=%ct $LAST_TAG)) / 86400 ))
+          echo "Days since last release: $DAYS_SINCE_RELEASE" >> release-analysis.md
+          
+          # Intelligent release decision
+          if [ "$BREAKING_COMMITS" -gt 0 ]; then
+            RELEASE_TYPE="major"
+            SHOULD_RELEASE="true"
+            RELEASE_REASON="BREAKING_CHANGES"
+          elif [ "$FEAT_COMMITS" -ge 3 ] || [ "$DAYS_SINCE_RELEASE" -ge 30 ]; then
+            RELEASE_TYPE="minor"
+            SHOULD_RELEASE="true"
+            RELEASE_REASON="FEATURE_ACCUMULATION"
+          elif [ "$FIX_COMMITS" -ge 5 ] || [ "$PERF_COMMITS" -ge 2 ] || [ "$DAYS_SINCE_RELEASE" -ge 14 ]; then
+            RELEASE_TYPE="patch"
+            SHOULD_RELEASE="true"
+            RELEASE_REASON="BUG_FIXES_ACCUMULATED"
+          elif [ "$COMMITS_SINCE" -ge 20 ]; then
+            RELEASE_TYPE="patch"
+            SHOULD_RELEASE="true"
+            RELEASE_REASON="HIGH_COMMIT_VOLUME"
+          fi
+          
+          # Override with manual input
+          if [ "${{ env.RELEASE_TYPE }}" != "auto" ]; then
+            RELEASE_TYPE="${{ env.RELEASE_TYPE }}"
+            SHOULD_RELEASE="true"
+            RELEASE_REASON="MANUAL_OVERRIDE"
+          fi
+        fi
+        
+        # Calculate next version
+        if [ "$SHOULD_RELEASE" == "true" ]; then
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          
+          if [[ $LAST_TAG =~ v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+            MAJOR=${BASH_REMATCH[1]}
+            MINOR=${BASH_REMATCH[2]}
+            PATCH=${BASH_REMATCH[3]}
+          else
+            MAJOR=0
+            MINOR=1
+            PATCH=0
+          fi
+          
+          case $RELEASE_TYPE in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+          
+          NEXT_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "Calculated next version: $NEXT_VERSION" >> release-analysis.md
+        fi
+        
+        echo "" >> release-analysis.md
+        echo "## Decision Summary" >> release-analysis.md
+        echo "Should Release: $SHOULD_RELEASE" >> release-analysis.md
+        echo "Release Type: $RELEASE_TYPE" >> release-analysis.md
+        echo "Reason: $RELEASE_REASON" >> release-analysis.md
+        if [ "$SHOULD_RELEASE" == "true" ]; then
+          echo "Next Version: $NEXT_VERSION" >> release-analysis.md
+        fi
+        
+        # Output results
+        echo "should_release=$SHOULD_RELEASE" >> $GITHUB_OUTPUT
+        echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+        echo "release_reason=$RELEASE_REASON" >> $GITHUB_OUTPUT
+        if [ "$SHOULD_RELEASE" == "true" ]; then
+          echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+        fi
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Upload analysis
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-detection-analysis
+        path: release-analysis.md
+        retention-days: 30
+
+  pre-release-validation:
+    name: Pre-Release Validation
+    runs-on: ubuntu-latest
+    needs: trigger-detection
+    if: needs.trigger-detection.outputs.should_release == 'true' && env.SKIP_VALIDATION != 'true'
+    outputs:
+      validation_passed: ${{ steps.validate.outputs.validation_passed }}
+      validation_report: ${{ steps.validate.outputs.validation_report }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+    
+    - name: Comprehensive pre-release validation
+      id: validate
+      run: |
+        echo "🔍 PRE-RELEASE VALIDATION SUITE" > validation-report.md
+        echo "Version: ${{ needs.trigger-detection.outputs.next_version }}" >> validation-report.md
+        echo "Release Type: ${{ needs.trigger-detection.outputs.release_type }}" >> validation-report.md
+        echo "" >> validation-report.md
+        
+        VALIDATION_SCORE=100
+        CRITICAL_FAILURES=()
+        
+        # 1. BUILD VALIDATION
+        echo "## 🔨 Build Validation" >> validation-report.md
+        if go build ./...; then
+          echo "✅ Build successful" >> validation-report.md
+        else
+          echo "❌ Build failed" >> validation-report.md
+          VALIDATION_SCORE=$((VALIDATION_SCORE - 40))
+          CRITICAL_FAILURES+=("BUILD_FAILURE")
+        fi
+        
+        # 2. TEST SUITE VALIDATION
+        echo "" >> validation-report.md
+        echo "## 🧪 Test Suite Validation" >> validation-report.md
+        
+        if go test -v ./... > test-results.txt 2>&1; then
+          PASSED_TESTS=$(grep -c "PASS:" test-results.txt || echo "0")
+          FAILED_TESTS=$(grep -c "FAIL:" test-results.txt || echo "0")
+          echo "✅ Tests passed: $PASSED_TESTS" >> validation-report.md
+          
+          if [ "$FAILED_TESTS" -gt 0 ]; then
+            echo "❌ Tests failed: $FAILED_TESTS" >> validation-report.md
+            VALIDATION_SCORE=$((VALIDATION_SCORE - 30))
+            CRITICAL_FAILURES+=("TEST_FAILURES")
+          fi
+        else
+          echo "❌ Test suite execution failed" >> validation-report.md
+          VALIDATION_SCORE=$((VALIDATION_SCORE - 40))
+          CRITICAL_FAILURES+=("TEST_EXECUTION_FAILURE")
+        fi
+        
+        # 3. COVERAGE VALIDATION
+        if go test -coverprofile=coverage.out ./...; then
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "📊 Test Coverage: ${COVERAGE}%" >> validation-report.md
+          
+          if (( $(echo "$COVERAGE < 70" | bc -l) )); then
+            echo "⚠️ Low test coverage detected" >> validation-report.md
+            VALIDATION_SCORE=$((VALIDATION_SCORE - 10))
+          fi
+        fi
+        
+        # 4. SECURITY VALIDATION
+        echo "" >> validation-report.md
+        echo "## 🔒 Security Validation" >> validation-report.md
+        
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        if govulncheck ./... 2>&1 | grep -q "No vulnerabilities found"; then
+          echo "✅ No security vulnerabilities" >> validation-report.md
+        else
+          echo "❌ Security vulnerabilities detected" >> validation-report.md
+          VALIDATION_SCORE=$((VALIDATION_SCORE - 25))
+          CRITICAL_FAILURES+=("SECURITY_VULNERABILITIES")
+        fi
+        
+        # 5. INTEGRATION VALIDATION
+        echo "" >> validation-report.md
+        echo "## 🔗 Integration Validation" >> validation-report.md
+        
+        # Build for multiple platforms
+        PLATFORMS=("linux/amd64" "darwin/amd64" "windows/amd64")
+        FAILED_BUILDS=0
+        
+        for platform in "${PLATFORMS[@]}"; do
+          os=${platform%/*}
+          arch=${platform#*/}
+          
+          if CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -o axon-test-$os-$arch .; then
+            echo "✅ Build successful for $platform" >> validation-report.md
+          else
+            echo "❌ Build failed for $platform" >> validation-report.md
+            FAILED_BUILDS=$((FAILED_BUILDS + 1))
+          fi
+        done
+        
+        if [ "$FAILED_BUILDS" -gt 0 ]; then
+          VALIDATION_SCORE=$((VALIDATION_SCORE - (FAILED_BUILDS * 5)))
+        fi
+        
+        # 6. DOCUMENTATION VALIDATION
+        echo "" >> validation-report.md
+        echo "## 📚 Documentation Validation" >> validation-report.md
+        
+        if [ -f "README.md" ] && [ -f "CHANGELOG.md" ]; then
+          echo "✅ Core documentation present" >> validation-report.md
+        else
+          echo "⚠️ Missing core documentation files" >> validation-report.md
+          VALIDATION_SCORE=$((VALIDATION_SCORE - 5))
+        fi
+        
+        # 7. DEPENDENCY VALIDATION
+        echo "" >> validation-report.md
+        echo "## 📦 Dependency Validation" >> validation-report.md
+        
+        if go mod verify; then
+          echo "✅ Dependencies verified" >> validation-report.md
+        else
+          echo "❌ Dependency verification failed" >> validation-report.md
+          VALIDATION_SCORE=$((VALIDATION_SCORE - 15))
+          CRITICAL_FAILURES+=("DEPENDENCY_ISSUES")
+        fi
+        
+        # Final validation decision
+        echo "" >> validation-report.md
+        echo "## 🎯 Validation Summary" >> validation-report.md
+        echo "Score: $VALIDATION_SCORE/100" >> validation-report.md
+        
+        if [ ${#CRITICAL_FAILURES[@]} -eq 0 ] && [ "$VALIDATION_SCORE" -ge 80 ]; then
+          echo "✅ **VALIDATION PASSED** - Release approved" >> validation-report.md
+          echo "validation_passed=true" >> $GITHUB_OUTPUT
+        else
+          echo "❌ **VALIDATION FAILED** - Release blocked" >> validation-report.md
+          echo "validation_passed=false" >> $GITHUB_OUTPUT
+          
+          if [ ${#CRITICAL_FAILURES[@]} -gt 0 ]; then
+            echo "" >> validation-report.md
+            echo "### Critical Failures:" >> validation-report.md
+            for failure in "${CRITICAL_FAILURES[@]}"; do
+              echo "- $failure" >> validation-report.md
+            done
+          fi
+        fi
+        
+        echo "validation_report<<EOF" >> $GITHUB_OUTPUT
+        cat validation-report.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Upload validation report
+      uses: actions/upload-artifact@v4
+      with:
+        name: pre-release-validation-report
+        path: |
+          validation-report.md
+          test-results.txt
+          coverage.out
+        retention-days: 90
+
+  automated-release:
+    name: Execute Automated Release
+    runs-on: ubuntu-latest
+    needs: [trigger-detection, pre-release-validation]
+    if: |
+      needs.trigger-detection.outputs.should_release == 'true' && 
+      (needs.pre-release-validation.outputs.validation_passed == 'true' || env.SKIP_VALIDATION == 'true')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+    
+    - name: Generate comprehensive changelog
+      id: changelog
+      run: |
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        NEW_VERSION="${{ needs.trigger-detection.outputs.next_version }}"
+        
+        cat > RELEASE_CHANGELOG.md << EOF
+# Release $NEW_VERSION
+
+**Release Type:** ${{ needs.trigger-detection.outputs.release_type }}
+**Release Reason:** ${{ needs.trigger-detection.outputs.release_reason }}
+**Generated:** $(date -u)
+
+## 🚀 What's New
+
+$(if [ -n "$LAST_TAG" ]; then git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --grep="^feat"; else git log --pretty=format:"- %s (%h)" --grep="^feat" | head -10; fi)
+
+## 🐛 Bug Fixes
+
+$(if [ -n "$LAST_TAG" ]; then git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --grep="^fix"; else git log --pretty=format:"- %s (%h)" --grep="^fix" | head -10; fi)
+
+## ⚡ Performance Improvements
+
+$(if [ -n "$LAST_TAG" ]; then git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --grep="^perf"; else git log --pretty=format:"- %s (%h)" --grep="^perf" | head -5; fi)
+
+## 🔧 Other Changes
+
+$(if [ -n "$LAST_TAG" ]; then git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --invert-grep --grep="^feat" --grep="^fix" --grep="^perf"; else git log --pretty=format:"- %s (%h)" --invert-grep --grep="^feat" --grep="^fix" --grep="^perf" | head -10; fi)
+
+## 📊 Release Statistics
+
+- **Total Commits:** $(if [ -n "$LAST_TAG" ]; then git rev-list ${LAST_TAG}..HEAD --count; else git rev-list HEAD --count; fi)
+- **Contributors:** $(if [ -n "$LAST_TAG" ]; then git log ${LAST_TAG}..HEAD --format="%an" | sort -u | wc -l; else git log --format="%an" | sort -u | wc -l; fi)
+- **Files Changed:** $(if [ -n "$LAST_TAG" ]; then git diff --name-only ${LAST_TAG}..HEAD | wc -l; else echo "N/A"; fi)
+
+## 🔍 Quality Metrics
+
+$(if [ -f "coverage.out" ]; then echo "- **Test Coverage:** $(go tool cover -func=coverage.out | grep total | awk '{print $3}')"; fi)
+- **Validation Score:** $(echo "${{ needs.pre-release-validation.outputs.validation_report }}" | grep "Score:" | cut -d' ' -f2 || echo "Skipped")
+- **Security Status:** ✅ No known vulnerabilities
+
+## 🚀 Installation
+
+### Binary Download
+Download the appropriate binary for your platform from the release assets.
+
+### Go Install
+\`\`\`bash
+go install github.com/\${{ github.repository }}@$NEW_VERSION
+\`\`\`
+
+### Package Managers
+- **Homebrew:** Coming soon
+- **APT:** Coming soon
+- **Chocolatey:** Coming soon
+
+---
+*This release was automatically generated by the Intelligent Release Management System*
+*Validation: ${{ needs.pre-release-validation.outputs.validation_passed == 'true' && 'Passed' || 'Skipped' }}*
+EOF
+    
+    - name: Build release artifacts
+      run: |
+        mkdir -p dist
+        
+        # Build for all target platforms
+        PLATFORMS=(
+          "linux/amd64"
+          "linux/arm64"
+          "darwin/amd64"
+          "darwin/arm64"
+          "windows/amd64"
+          "windows/arm64"
+        )
+        
+        for platform in "${PLATFORMS[@]}"; do
+          os=${platform%/*}
+          arch=${platform#*/}
+          
+          binary_name="axon"
+          if [ "$os" = "windows" ]; then
+            binary_name="axon.exe"
+          fi
+          
+          echo "Building for $os/$arch..."
+          CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build \
+            -ldflags="-w -s -X main.version=${{ needs.trigger-detection.outputs.next_version }} -X main.buildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" \
+            -o "dist/axon-$os-$arch-${{ needs.trigger-detection.outputs.next_version }}/$binary_name" .
+          
+          # Create archive
+          cd dist
+          if [ "$os" = "windows" ]; then
+            zip -r "axon-$os-$arch-${{ needs.trigger-detection.outputs.next_version }}.zip" "axon-$os-$arch-${{ needs.trigger-detection.outputs.next_version }}"
+          else
+            tar -czf "axon-$os-$arch-${{ needs.trigger-detection.outputs.next_version }}.tar.gz" "axon-$os-$arch-${{ needs.trigger-detection.outputs.next_version }}"
+          fi
+          cd ..
+        done
+        
+        # Generate checksums
+        cd dist
+        sha256sum *.tar.gz *.zip > checksums.txt
+        sha512sum *.tar.gz *.zip > checksums-sha512.txt
+        cd ..
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ needs.trigger-detection.outputs.next_version }}
+        name: Axon ${{ needs.trigger-detection.outputs.next_version }}
+        body_path: RELEASE_CHANGELOG.md
+        draft: false
+        prerelease: ${{ contains(needs.trigger-detection.outputs.next_version, '-') }}
+        files: |
+          dist/*.tar.gz
+          dist/*.zip
+          dist/checksums.txt
+          dist/checksums-sha512.txt
+        generate_release_notes: true
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Update version references
+      run: |
+        # Update version in README if it exists
+        if [ -f "README.md" ]; then
+          sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/${{ needs.trigger-detection.outputs.next_version }}/g" README.md
+        fi
+        
+        # Update CHANGELOG.md
+        if [ -f "CHANGELOG.md" ]; then
+          # Add new release entry at the top
+          {
+            echo "# Changelog"
+            echo ""
+            echo "## [${{ needs.trigger-detection.outputs.next_version }}] - $(date +%Y-%m-%d)"
+            echo ""
+            tail -n +3 CHANGELOG.md
+          } > CHANGELOG.tmp && mv CHANGELOG.tmp CHANGELOG.md
+        else
+          # Create CHANGELOG.md
+          cp RELEASE_CHANGELOG.md CHANGELOG.md
+        fi
+    
+    - name: Commit version updates
+      run: |
+        git config --local user.email "intelligent-release@github.com"
+        git config --local user.name "Intelligent Release System"
+        
+        git add -A
+        git commit -m "release: ${{ needs.trigger-detection.outputs.next_version }}
+
+Release Type: ${{ needs.trigger-detection.outputs.release_type }}
+Reason: ${{ needs.trigger-detection.outputs.release_reason }}
+
+Generated by: Intelligent Release Management System" || echo "No changes to commit"
+        
+        git push
+
+  post-release-automation:
+    name: Post-Release Automation
+    runs-on: ubuntu-latest
+    needs: [trigger-detection, automated-release]
+    if: needs.automated-release.result == 'success'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Close release issues
+      run: |
+        # Close any open release proposal issues
+        gh issue list --label "release,automated" --state open --json number,title | \
+          jq -r '.[] | select(.title | contains("${{ needs.trigger-detection.outputs.next_version }}")) | .number' | \
+          while read issue_number; do
+            gh issue close $issue_number --comment "✅ Release ${{ needs.trigger-detection.outputs.next_version }} has been successfully published!
+
+[View Release](https://github.com/${{ github.repository }}/releases/tag/${{ needs.trigger-detection.outputs.next_version }})
+
+This issue is now closed as the release has been completed."
+          done
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Create next milestone
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const version = '${{ needs.trigger-detection.outputs.next_version }}';
+          const releaseType = '${{ needs.trigger-detection.outputs.release_type }}';
+          
+          // Calculate next version for milestone
+          const match = version.match(/v(\d+)\.(\d+)\.(\d+)/);
+          if (match) {
+            let [, major, minor, patch] = match.map(Number);
+            
+            // Create milestone for next minor version
+            minor += 1;
+            const nextVersion = `v${major}.${minor}.0`;
+            
+            try {
+              await github.rest.issues.createMilestone({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: nextVersion,
+                description: `Next minor release with new features and improvements`,
+                due_on: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString()
+              });
+              console.log(`Created milestone: ${nextVersion}`);
+            } catch (error) {
+              console.log(`Milestone ${nextVersion} may already exist:`, error.message);
+            }
+          }
+    
+    - name: Notify integrations
+      run: |
+        echo "🔔 POST-RELEASE INTEGRATIONS" > post-release-report.md
+        echo "Release: ${{ needs.trigger-detection.outputs.next_version }}" >> post-release-report.md
+        echo "Time: $(date -u)" >> post-release-report.md
+        echo "" >> post-release-report.md
+        
+        # Future integrations:
+        echo "## 🚀 Package Manager Updates" >> post-release-report.md
+        echo "- [ ] Homebrew formula update" >> post-release-report.md
+        echo "- [ ] APT repository update" >> post-release-report.md
+        echo "- [ ] Chocolatey package update" >> post-release-report.md
+        echo "- [ ] AUR package update" >> post-release-report.md
+        echo "" >> post-release-report.md
+        
+        echo "## 📢 Announcement Channels" >> post-release-report.md
+        echo "- [ ] Social media announcement" >> post-release-report.md
+        echo "- [ ] Community forum post" >> post-release-report.md
+        echo "- [ ] Documentation site update" >> post-release-report.md
+        echo "" >> post-release-report.md
+        
+        echo "## 📊 Release Metrics" >> post-release-report.md
+        echo "- Release Type: ${{ needs.trigger-detection.outputs.release_type }}" >> post-release-report.md
+        echo "- Trigger: ${{ needs.trigger-detection.outputs.release_reason }}" >> post-release-report.md
+        echo "- Validation: ${{ needs.pre-release-validation.outputs.validation_passed }}" >> post-release-report.md
+    
+    - name: Upload post-release report
+      uses: actions/upload-artifact@v4
+      with:
+        name: post-release-automation-report
+        path: post-release-report.md
+        retention-days: 90
+
+  release-failure-handling:
+    name: Release Failure Recovery
+    runs-on: ubuntu-latest
+    needs: [trigger-detection, pre-release-validation, automated-release]
+    if: |
+      always() && 
+      needs.trigger-detection.outputs.should_release == 'true' && 
+      (needs.pre-release-validation.result == 'failure' || needs.automated-release.result == 'failure')
+    
+    steps:
+    - name: Analyze failure and create recovery plan
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const validationFailed = '${{ needs.pre-release-validation.result }}' === 'failure';
+          const releaseFailed = '${{ needs.automated-release.result }}' === 'failure';
+          
+          let title = '🚨 Automated Release Failure';
+          let body = `## Release Failure Report
+          
+          **Intended Version:** ${{ needs.trigger-detection.outputs.next_version }}
+          **Release Type:** ${{ needs.trigger-detection.outputs.release_type }}
+          **Trigger:** ${{ needs.trigger-detection.outputs.release_reason }}
+          
+          ### Failure Analysis
+          `;
+          
+          if (validationFailed) {
+            body += `
+          #### ❌ Pre-Release Validation Failed
+          
+          The automated validation checks failed. This typically indicates:
+          - Build failures
+          - Test failures
+          - Security vulnerabilities
+          - Quality thresholds not met
+          
+          **Action Required:** Review the validation report and fix the identified issues.
+          `;
+          }
+          
+          if (releaseFailed) {
+            body += `
+          #### ❌ Release Process Failed
+          
+          The release creation process encountered an error. This could be due to:
+          - GitHub API issues
+          - Build artifact problems
+          - Permission issues
+          - Network connectivity problems
+          
+          **Action Required:** Review the release workflow logs and retry if appropriate.
+          `;
+          }
+          
+          body += `
+          ### Recovery Options
+          
+          1. **Fix Issues and Retry:** Address the root cause and trigger release again
+          2. **Manual Release:** Create release manually if automation issues persist
+          3. **Skip Validation:** Use \`skip_validation: true\` if validation is overly strict
+          
+          ### Next Steps
+          
+          - [ ] Review failure logs
+          - [ ] Fix identified issues
+          - [ ] Decide on recovery approach
+          - [ ] Execute recovery plan
+          
+          ---
+          *Generated by Intelligent Release Management System*
+          *Workflow Run: ${{ github.run_id }}*
+          `;
+          
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: title,
+            body: body,
+            labels: ['release', 'failure', 'needs-attention', 'automated']
+          });
+

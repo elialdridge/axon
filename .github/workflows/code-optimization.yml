@@ -1,0 +1,558 @@
+name: Automated Code Optimization
+
+on:
+  schedule:
+    # Run optimization daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      optimization_level:
+        description: 'Optimization level (light, medium, aggressive)'
+        required: false
+        default: 'medium'
+        type: choice
+        options:
+          - light
+          - medium
+          - aggressive
+      auto_commit:
+        description: 'Automatically commit improvements'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+env:
+  GO_VERSION: '1.23'
+  OPTIMIZATION_LEVEL: ${{ github.event.inputs.optimization_level || 'medium' }}
+  AUTO_COMMIT: ${{ github.event.inputs.auto_commit || 'true' }}
+
+jobs:
+  performance-analysis:
+    name: Performance Analysis & Optimization
+    runs-on: ubuntu-latest
+    outputs:
+      has_improvements: ${{ steps.analysis.outputs.has_improvements }}
+      optimization_report: ${{ steps.analysis.outputs.report }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    
+    - name: Install optimization tools
+      run: |
+        # Performance profiling tools
+        go install github.com/google/pprof@latest
+        go install golang.org/x/perf/cmd/benchstat@latest
+        go install honnef.co/go/tools/cmd/staticcheck@latest
+        go install github.com/kisielk/errcheck@latest
+        go install github.com/client9/misspell/cmd/misspell@latest
+        go install mvdan.cc/gofumpt@latest
+        go install github.com/segmentio/golines@latest
+        go install github.com/incu6us/goimports-reviser/v3@latest
+    
+    - name: Run performance benchmarks
+      id: benchmarks
+      run: |
+        mkdir -p optimization-reports
+        
+        # Run benchmarks with memory and CPU profiling
+        go test -bench=. -benchmem -cpuprofile=cpu.prof -memprofile=mem.prof ./... > optimization-reports/benchmarks.txt 2>&1 || true
+        
+        # Analyze memory allocations
+        if [ -f mem.prof ]; then
+          go tool pprof -top mem.prof > optimization-reports/memory-analysis.txt 2>/dev/null || true
+        fi
+        
+        # Analyze CPU usage
+        if [ -f cpu.prof ]; then
+          go tool pprof -top cpu.prof > optimization-reports/cpu-analysis.txt 2>/dev/null || true
+        fi
+        
+        echo "benchmarks_completed=true" >> $GITHUB_OUTPUT
+    
+    - name: Code quality analysis
+      id: quality
+      run: |
+        # Static analysis
+        staticcheck ./... > optimization-reports/staticcheck.txt 2>&1 || true
+        
+        # Error checking
+        errcheck ./... > optimization-reports/errcheck.txt 2>&1 || true
+        
+        # Spell checking
+        misspell -error . > optimization-reports/misspell.txt 2>&1 || true
+        
+        # Cyclomatic complexity analysis
+        gocyclo -over 10 . > optimization-reports/complexity.txt 2>&1 || true
+        
+        # Dead code detection
+        go list -json ./... | jq -r '.Dir' | xargs -I {} find {} -name "*.go" -exec grep -l "TODO\|FIXME\|XXX\|HACK" {} \; > optimization-reports/technical-debt.txt 2>/dev/null || true
+        
+        echo "quality_analysis_completed=true" >> $GITHUB_OUTPUT
+    
+    - name: Dependency analysis
+      id: deps
+      run: |
+        # Analyze dependencies for updates and security
+        go list -m -u all > optimization-reports/dependency-updates.txt 2>&1 || true
+        
+        # Check for unused dependencies
+        go mod tidy
+        git diff --name-only > optimization-reports/mod-changes.txt
+        
+        # License compatibility check
+        go-licenses csv ./... > optimization-reports/licenses.csv 2>/dev/null || true
+        
+        echo "deps_analysis_completed=true" >> $GITHUB_OUTPUT
+    
+    - name: Generate optimization analysis
+      id: analysis
+      run: |
+        cat > optimization-reports/analysis.md << 'EOF'
+        # Automated Optimization Analysis Report
+        
+        Generated: $(date -u)
+        Optimization Level: ${{ env.OPTIMIZATION_LEVEL }}
+        
+        ## Performance Metrics
+        $(if [ -f optimization-reports/benchmarks.txt ]; then echo "### Benchmarks"; cat optimization-reports/benchmarks.txt | head -20; fi)
+        
+        ## Code Quality Issues
+        $(if [ -s optimization-reports/staticcheck.txt ]; then echo "### Static Analysis Issues"; cat optimization-reports/staticcheck.txt | head -10; fi)
+        $(if [ -s optimization-reports/errcheck.txt ]; then echo "### Error Handling Issues"; cat optimization-reports/errcheck.txt | head -10; fi)
+        $(if [ -s optimization-reports/complexity.txt ]; then echo "### High Complexity Functions"; cat optimization-reports/complexity.txt | head -10; fi)
+        
+        ## Technical Debt
+        $(if [ -s optimization-reports/technical-debt.txt ]; then echo "### TODO/FIXME Items"; cat optimization-reports/technical-debt.txt | head -20; fi)
+        
+        ## Dependencies
+        $(if [ -s optimization-reports/dependency-updates.txt ]; then echo "### Available Updates"; cat optimization-reports/dependency-updates.txt | grep -E '\[|\+' | head -10; fi)
+        EOF
+        
+        # Check if we have any actionable improvements
+        ISSUES_COUNT=0
+        [ -s optimization-reports/staticcheck.txt ] && ISSUES_COUNT=$((ISSUES_COUNT + $(wc -l < optimization-reports/staticcheck.txt)))
+        [ -s optimization-reports/errcheck.txt ] && ISSUES_COUNT=$((ISSUES_COUNT + $(wc -l < optimization-reports/errcheck.txt)))
+        [ -s optimization-reports/misspell.txt ] && ISSUES_COUNT=$((ISSUES_COUNT + $(wc -l < optimization-reports/misspell.txt)))
+        
+        if [ $ISSUES_COUNT -gt 0 ]; then
+          echo "has_improvements=true" >> $GITHUB_OUTPUT
+        else
+          echo "has_improvements=false" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "report<<EOF" >> $GITHUB_OUTPUT
+        cat optimization-reports/analysis.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Upload optimization reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: optimization-reports
+        path: optimization-reports/
+        retention-days: 30
+
+  auto-improvements:
+    name: Automated Code Improvements
+    runs-on: ubuntu-latest
+    needs: performance-analysis
+    if: needs.performance-analysis.outputs.has_improvements == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    
+    - name: Install improvement tools
+      run: |
+        go install mvdan.cc/gofumpt@latest
+        go install github.com/segmentio/golines@latest
+        go install github.com/incu6us/goimports-reviser/v3@latest
+        go install github.com/client9/misspell/cmd/misspell@latest
+        go install golang.org/x/tools/cmd/goimports@latest
+    
+    - name: Apply automated fixes
+      id: fixes
+      run: |
+        echo "Applied fixes:" > fixes-summary.txt
+        
+        # Fix imports
+        echo "- Organizing imports..." >> fixes-summary.txt
+        find . -name "*.go" -not -path "./vendor/*" -exec goimports -w {} \;
+        find . -name "*.go" -not -path "./vendor/*" -exec goimports-reviser -use-cache -rm-unused {} \;
+        
+        # Format code with gofumpt (stricter than gofmt)
+        echo "- Formatting code with gofumpt..." >> fixes-summary.txt
+        gofumpt -w .
+        
+        # Fix line length issues
+        if [ "${{ env.OPTIMIZATION_LEVEL }}" != "light" ]; then
+          echo "- Fixing long lines..." >> fixes-summary.txt
+          find . -name "*.go" -not -path "./vendor/*" -exec golines -w -m 120 {} \;
+        fi
+        
+        # Fix spelling mistakes
+        echo "- Fixing spelling mistakes..." >> fixes-summary.txt
+        misspell -w .
+        
+        # Update go.mod
+        echo "- Updating dependencies..." >> fixes-summary.txt
+        go mod tidy
+        
+        # Check for changes
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "Changes detected and applied" >> fixes-summary.txt
+        else
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+          echo "No changes needed" >> fixes-summary.txt
+        fi
+        
+        echo "summary<<EOF" >> $GITHUB_OUTPUT
+        cat fixes-summary.txt >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Run tests after improvements
+      if: steps.fixes.outputs.has_changes == 'true'
+      run: |
+        go test ./... > test-results.txt 2>&1
+        if [ $? -eq 0 ]; then
+          echo "✅ All tests pass after improvements" >> fixes-summary.txt
+        else
+          echo "❌ Some tests failed after improvements" >> fixes-summary.txt
+          cat test-results.txt >> fixes-summary.txt
+          exit 1
+        fi
+    
+    - name: Commit improvements
+      if: steps.fixes.outputs.has_changes == 'true' && env.AUTO_COMMIT == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -A
+        git commit -m "autofix: Apply automated code improvements
+
+        ${{ steps.fixes.outputs.summary }}
+        
+        Optimization level: ${{ env.OPTIMIZATION_LEVEL }}
+        Generated by: Automated Code Optimization workflow"
+        git push
+
+  advanced-optimization:
+    name: Advanced Code Optimization
+    runs-on: ubuntu-latest
+    needs: [performance-analysis, auto-improvements]
+    if: github.event.inputs.optimization_level == 'aggressive'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    
+    - name: Advanced refactoring analysis
+      id: refactor
+      run: |
+        mkdir -p refactor-suggestions
+        
+        # Analyze for potential optimizations
+        echo "# Advanced Refactoring Suggestions" > refactor-suggestions/suggestions.md
+        echo "" >> refactor-suggestions/suggestions.md
+        
+        # Find duplicate code blocks
+        echo "## Potential Code Duplication" >> refactor-suggestions/suggestions.md
+        find . -name "*.go" -not -path "./vendor/*" | xargs -I {} grep -n "func " {} | sort | uniq -d | head -10 >> refactor-suggestions/suggestions.md || true
+        
+        # Find large functions that could be split
+        echo "## Large Functions (>50 lines)" >> refactor-suggestions/suggestions.md
+        find . -name "*.go" -not -path "./vendor/*" -exec awk '/^func/ {start=NR; func=$0} /^}$/ && start {if(NR-start>50) print FILENAME":"start":"func}' {} \; >> refactor-suggestions/suggestions.md || true
+        
+        # Find potential interface extractions
+        echo "## Potential Interface Extractions" >> refactor-suggestions/suggestions.md
+        find . -name "*.go" -not -path "./vendor/*" -exec grep -n "type.*struct" {} \; | head -10 >> refactor-suggestions/suggestions.md || true
+        
+        # Memory optimization suggestions
+        echo "## Memory Optimization Opportunities" >> refactor-suggestions/suggestions.md
+        grep -r "make(\[\]" . --include="*.go" | head -10 >> refactor-suggestions/suggestions.md || true
+        grep -r "append(" . --include="*.go" | head -10 >> refactor-suggestions/suggestions.md || true
+    
+    - name: Generate improvement PR
+      if: env.AUTO_COMMIT == 'false'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "optimize: Advanced code optimization suggestions"
+        title: "🚀 Automated Code Optimization Suggestions"
+        body: |
+          ## Automated Optimization Analysis
+          
+          This PR contains suggestions for advanced code optimizations based on static analysis.
+          
+          ${{ needs.performance-analysis.outputs.optimization_report }}
+          
+          ### Refactoring Suggestions
+          See the uploaded artifacts for detailed refactoring suggestions.
+          
+          ### Review Checklist
+          - [ ] Review performance benchmark changes
+          - [ ] Validate memory usage improvements  
+          - [ ] Check for any breaking changes
+          - [ ] Ensure all tests pass
+          
+          *This PR was automatically generated by the Code Optimization workflow.*
+        branch: automated/code-optimization
+        delete-branch: true
+        labels: |
+          optimization
+          automated
+          performance
+    
+    - name: Upload refactoring suggestions
+      uses: actions/upload-artifact@v4
+      with:
+        name: refactor-suggestions
+        path: refactor-suggestions/
+        retention-days: 30
+
+  test-improvements:
+    name: Automated Test Improvements
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    
+    - name: Install test tools
+      run: |
+        go install github.com/axw/gocov/gocov@latest
+        go install github.com/AlekSi/gocov-xml@latest
+        go install github.com/t-yuki/gocover-cobertura@latest
+    
+    - name: Analyze test coverage
+      id: coverage
+      run: |
+        # Generate detailed coverage report
+        go test -coverprofile=coverage.out -covermode=atomic ./...
+        go tool cover -html=coverage.out -o coverage.html
+        
+        # Get coverage percentage
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        echo "coverage_percentage=$COVERAGE" >> $GITHUB_OUTPUT
+        
+        # Find untested functions
+        go tool cover -func=coverage.out | grep "0.0%" > uncovered-functions.txt || true
+        
+        # Generate improvement suggestions
+        echo "# Test Coverage Improvement Suggestions" > test-improvements.md
+        echo "" >> test-improvements.md
+        echo "Current coverage: ${COVERAGE}%" >> test-improvements.md
+        echo "" >> test-improvements.md
+        
+        if [ -s uncovered-functions.txt ]; then
+          echo "## Uncovered Functions" >> test-improvements.md
+          cat uncovered-functions.txt >> test-improvements.md
+          echo "" >> test-improvements.md
+        fi
+        
+        # Suggest test files for missing coverage
+        find . -name "*.go" -not -name "*_test.go" -not -path "./vendor/*" | while read file; do
+          testfile="${file%%.go}_test.go"
+          if [ ! -f "$testfile" ]; then
+            echo "Missing test file: $testfile for $file" >> test-improvements.md
+          fi
+        done
+    
+    - name: Generate test templates
+      if: steps.coverage.outputs.coverage_percentage < 80
+      run: |
+        mkdir -p generated-tests
+        
+        # Generate test templates for functions without tests
+        find . -name "*.go" -not -name "*_test.go" -not -path "./vendor/*" | while read file; do
+          testfile="${file%%.go}_test.go"
+          if [ ! -f "$testfile" ]; then
+            package_name=$(grep "^package " "$file" | head -1 | awk '{print $2}')
+            cat > "generated-tests/$(basename $testfile)" << EOF
+        package ${package_name}
+        
+        import (
+        	"testing"
+        )
+        
+        // TODO: Add tests for functions in $(basename $file)
+        // Generated by automated test improvement workflow
+        
+        func TestPlaceholder(t *testing.T) {
+        	t.Skip("Template test - implement actual tests")
+        }
+        EOF
+          fi
+        done
+    
+    - name: Upload test improvements
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-improvements
+        path: |
+          test-improvements.md
+          coverage.html
+          uncovered-functions.txt
+          generated-tests/
+        retention-days: 30
+
+  security-audit:
+    name: Automated Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    
+    - name: Security analysis
+      run: |
+        # Install security tools
+        go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        
+        mkdir -p security-reports
+        
+        # Run gosec security scanner
+        gosec -fmt json -out security-reports/gosec.json ./... || true
+        gosec -fmt text -out security-reports/gosec.txt ./... || true
+        
+        # Check for vulnerabilities
+        govulncheck -json ./... > security-reports/vulncheck.json 2>&1 || true
+        
+        # Generate security report
+        echo "# Security Audit Report" > security-reports/security-report.md
+        echo "" >> security-reports/security-report.md
+        echo "Generated: $(date)" >> security-reports/security-report.md
+        echo "" >> security-reports/security-report.md
+        
+        if [ -s security-reports/gosec.txt ]; then
+          echo "## Security Issues Found" >> security-reports/security-report.md
+          cat security-reports/gosec.txt >> security-reports/security-report.md
+        else
+          echo "## No Security Issues Found ✅" >> security-reports/security-report.md
+        fi
+    
+    - name: Upload security reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: security-reports/
+        retention-days: 90
+
+  reporting:
+    name: Generate Optimization Report
+    runs-on: ubuntu-latest
+    needs: [performance-analysis, auto-improvements, test-improvements, security-audit]
+    if: always()
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+    
+    - name: Generate comprehensive report
+      run: |
+        mkdir -p final-report
+        
+        cat > final-report/optimization-summary.md << 'EOF'
+        # Comprehensive Optimization Report
+        
+        **Generated:** $(date -u)
+        **Optimization Level:** ${{ env.OPTIMIZATION_LEVEL }}
+        **Workflow Run:** ${{ github.run_id }}
+        
+        ## Summary
+        
+        This report contains the results of automated code analysis and optimization.
+        
+        ### Performance Analysis
+        $(if [ -f optimization-reports/analysis.md ]; then cat optimization-reports/analysis.md; else echo "No performance issues found"; fi)
+        
+        ### Code Improvements Applied
+        ${{ needs.auto-improvements.result == 'success' && '✅ Automated fixes applied' || '⏭️ No automatic fixes needed' }}
+        
+        ### Test Coverage
+        $(if [ -f test-improvements.md ]; then cat test-improvements.md; else echo "Coverage analysis not available"; fi)
+        
+        ### Security Status
+        $(if [ -f security-reports/security-report.md ]; then cat security-reports/security-report.md; else echo "Security scan not available"; fi)
+        
+        ### Next Steps
+        
+        1. Review and merge any generated pull requests
+        2. Address high-priority security issues if found
+        3. Implement suggested test improvements
+        4. Consider refactoring suggestions for better maintainability
+        
+        ---
+        *This report was automatically generated by the Axon optimization workflow*
+        EOF
+    
+    - name: Upload final report
+      uses: actions/upload-artifact@v4
+      with:
+        name: comprehensive-optimization-report
+        path: final-report/
+        retention-days: 90
+    
+    - name: Create issue for manual review
+      if: needs.performance-analysis.outputs.has_improvements == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let reportContent = "Report generation failed";
+          
+          try {
+            reportContent = fs.readFileSync('final-report/optimization-summary.md', 'utf8');
+          } catch (error) {
+            console.log('Could not read report file:', error);
+          }
+          
+          await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `🔧 Automated Optimization Report - ${new Date().toISOString().split('T')[0]}`,
+            body: reportContent,
+            labels: ['optimization', 'automated', 'needs-review']
+          });
+
