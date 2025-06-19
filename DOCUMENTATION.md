@@ -6,20 +6,23 @@
 2. [System Requirements](#system-requirements)
 3. [Installation Guide](#installation-guide)
 4. [Configuration](#configuration)
-5. [Game Mechanics](#game-mechanics)
-6. [AI Integration](#ai-integration)
-7. [User Interface](#user-interface)
-8. [Command Reference](#command-reference)
-9. [API Documentation](#api-documentation)
-10. [Development Guide](#development-guide)
-11. [Testing](#testing)
-12. [Deployment](#deployment)
-13. [Troubleshooting](#troubleshooting)
-14. [Use Cases](#use-cases)
-15. [Performance Optimization](#performance-optimization)
-16. [Security Considerations](#security-considerations)
-17. [Extensibility](#extensibility)
-18. [Examples](#examples)
+5. [Terminal Compatibility](#terminal-compatibility)
+6. [Logging and Debugging](#logging-and-debugging)
+7. [Game Mechanics](#game-mechanics)
+8. [AI Integration](#ai-integration)
+9. [User Interface](#user-interface)
+10. [Command Reference](#command-reference)
+11. [Project Architecture](#project-architecture)
+12. [API Documentation](#api-documentation)
+13. [Development Guide](#development-guide)
+14. [Testing](#testing)
+15. [Deployment](#deployment)
+16. [Troubleshooting](#troubleshooting)
+17. [Use Cases](#use-cases)
+18. [Performance Optimization](#performance-optimization)
+19. [Security Considerations](#security-considerations)
+20. [Extensibility](#extensibility)
+21. [Examples](#examples)
 
 ## Overview
 
@@ -41,6 +44,142 @@ Axon is a revolutionary AI-driven adventure game that transforms natural languag
 - **Multi-Model Architecture**: Different AI models optimized for specific tasks
 - **Persistent State**: Complete game state persistence with JSON serialization
 - **Modular Design**: Clean architecture enabling easy modification and extension
+
+## Terminal Compatibility
+
+Axon features comprehensive terminal detection and compatibility support for maximum portability across systems:
+
+### Automatic Terminal Detection
+
+Axon automatically detects terminal capabilities using multiple methods:
+
+1. **TERM Environment Variable Analysis**: Identifies terminal type and capabilities
+2. **Dynamic Size Detection**: Uses ioctl, environment variables, tput, and stty
+3. **Feature Detection**: Determines color, mouse, alt-screen, and UTF-8 support
+4. **Compatibility Mode Detection**: Identifies minimal and System V terminals
+
+### Supported Terminal Types
+
+#### Modern Terminals (Full Features)
+- **xterm variants**: xterm, xterm-256color, xterm-color
+- **Terminal multiplexers**: screen, tmux
+- **Modern emulators**: gnome-terminal, konsole, Terminal.app
+- **Features**: Color, mouse, alt-screen, UTF-8, bold, underline
+
+#### Minimal Terminals (Basic Features)
+- **dumb**: CI/CD environments, simple scripts
+- **unknown**: Unrecognized terminal types
+- **vt52/vt100/vt102**: Very basic terminals
+- **Features**: Plain text only, no special formatting
+
+#### UNIX System V Compatible
+- **vt220**: Advanced VT terminal
+- **ansi**: ANSI.SYS compatible
+- **cons25**: FreeBSD console
+- **Features**: Basic formatting, limited color support
+
+### Terminal Detection Utility
+
+Use the included terminal detection utility to test compatibility:
+
+```bash
+# Check current terminal capabilities
+./terminal-info
+
+# Test with different terminal types
+TERM=dumb ./axon          # Minimal mode
+TERM=vt100 ./axon         # System V mode
+TERM=xterm-256color ./axon # Full featured mode
+
+# Force specific mode
+AXON_FORCE_MINIMAL=true ./axon
+```
+
+### Adaptive Interface Features
+
+#### Dynamic Layout Adjustment
+- **Size Detection**: Multiple fallback methods for terminal dimensions
+- **Safe Sizing**: Bounds checking with minimum 40x10, maximum 200x60
+- **Runtime Adaptation**: Responds to terminal resize events
+- **Layout Optimization**: Adjusts panel ratios based on available space
+
+#### Compatibility Options
+- **No Mouse**: Automatically disabled for minimal/System V terminals
+- **No Alt Screen**: Plain mode for limited terminals
+- **Simple Rendering**: Reduced complexity for compatibility
+- **Text-Only Mode**: Stripped formatting for maximum compatibility
+
+## Logging and Debugging
+
+Axon includes a comprehensive logging system for debugging and monitoring:
+
+### Logger Architecture
+
+```go
+// Logger components
+type Logger struct {
+    debugLogger *log.Logger  // Detailed debug information
+    infoLogger  *log.Logger  // General information
+    errorLogger *log.Logger  // Error conditions
+    logFile     *os.File     // Log file handle
+}
+```
+
+### Log Levels and Output
+
+#### Debug Level
+- Terminal detection details
+- AI request/response logging
+- Game state changes
+- Configuration loading
+- Performance metrics
+
+#### Info Level
+- Application startup/shutdown
+- World creation events
+- Player actions
+- Save/load operations
+- Terminal mode changes
+
+#### Error Level
+- API failures
+- File I/O errors
+- Configuration problems
+- Network issues
+- Validation failures
+
+### Debug Mode Usage
+
+```bash
+# Enable debug logging
+export AXON_DEBUG=true
+./axon
+
+# View real-time logs
+tail -f axon_debug.log
+
+# Filter specific components
+grep "Terminal" axon_debug.log
+grep "AI" axon_debug.log
+grep "World Creation" axon_debug.log
+```
+
+### Specialized Logging Functions
+
+```go
+// Specialized logging for different components
+logger.LogRequest(aiRequest)        // AI request details
+logger.LogResponse(aiResponse)      // AI response analysis
+logger.LogGameState(gameState)      // Complete game state
+logger.LogWorldCreation(step, data) // World generation process
+```
+
+### Log File Management
+
+- **Location**: `axon_debug.log` in current directory
+- **Format**: Timestamped entries with file/line information
+- **Rotation**: Manual cleanup (automatic rotation planned)
+- **Permissions**: 0666 for user/group read/write access
 
 ## System Requirements
 
@@ -642,6 +781,248 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 - **Dynamic Sizing**: Adapts to terminal resize
 - **Panel Ratios**: Input panel fixed height, history panel flexible
 - **Text Wrapping**: Automatic text wrapping for long lines
+
+## Project Architecture
+
+Axon follows a modular, layered architecture designed for maximum maintainability and extensibility:
+
+### High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        User Interface (TUI)                    │
+│                      Bubble Tea + Lip Gloss                    │
+├─────────────────────────────────────────────────────────────────┤
+│                         Game Engine                            │
+│          Action Processing, State Management, Rules            │
+├─────────────────────────────────────────────────────────────────┤
+│                       AI Integration                           │
+│              OpenRouter, Gemini, Model Selection              │
+├─────────────────────────────────────────────────────────────────┤
+│                    Storage & Persistence                       │
+│                  JSON Files, Save/Load System                 │
+├─────────────────────────────────────────────────────────────────┤
+│                  Configuration & Logging                       │
+│              Terminal Detection, Settings, Debug              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Current Project Structure
+
+```
+axon/
+├── main.go                           # Application entry point
+├── go.mod                             # Go module definition
+├── go.sum                             # Dependency lock file
+├── README.md                          # Basic project overview
+├── DOCUMENTATION.md                   # Comprehensive documentation
+├── TERMINAL_COMPATIBILITY.md          # Terminal compatibility guide
+├── TEST_REPORT.md                     # Test results and coverage
+├── CONTRIBUTING.md                    # Contribution guidelines
+├── LICENSE                            # Project license
+├── .gitignore                         # Git ignore rules
+├── Makefile                           # Build automation
+├── terminal-info*                     # Terminal detection utility
+├── axon_debug.log                     # Runtime debug log
+├── debug_world_creation.go            # Debug utilities
+├── cmd/
+│   └── test/
+│       └── main.go                    # Integration test utility
+└── internal/                          # Private application code
+    ├── config/
+    │   ├── config.go                  # Configuration management
+    │   └── config_test.go             # Configuration tests
+    ├── ai/
+    │   ├── client.go                  # AI client implementation
+    │   └── client_test.go             # AI client tests
+    ├── game/
+    │   ├── engine.go                  # Core game engine
+    │   ├── engine_test.go             # Engine tests
+    │   ├── integration_test.go        # Integration tests
+    │   ├── model.go                   # Bubble Tea UI model
+    │   ├── model_test.go              # UI model tests
+    │   ├── state.go                   # Game state management
+    │   └── state_test.go              # State management tests
+    ├── storage/
+    │   ├── storage.go                 # Persistence interface
+    │   └── storage_test.go            # Storage tests
+    ├── ui/
+    │   ├── styles.go                  # UI styling and themes
+    │   └── styles_test.go             # Style tests
+    ├── terminal/
+    │   ├── terminal.go                # Terminal detection
+    │   └── terminal_test.go           # Terminal tests
+    └── logger/
+        └── logger.go                  # Logging system
+```
+
+### Module Dependencies
+
+#### Core Dependencies
+- **Bubble Tea**: TUI framework for interactive terminal applications
+- **Lip Gloss**: Styling library for terminal UI components
+
+#### Architecture Principles
+
+1. **Single Responsibility**: Each package has a clear, focused purpose
+2. **Dependency Injection**: Dependencies passed explicitly, not hardcoded
+3. **Interface Segregation**: Small, focused interfaces for flexibility
+4. **Testability**: All components designed for easy unit testing
+5. **Platform Independence**: No platform-specific dependencies
+
+### Component Interaction Flow
+
+```
+User Input → UI Model → Game Engine → AI Client → Response
+     ↑                     ↓              ↓
+     └─── UI Update ←── State Update ←── Storage
+```
+
+#### Detailed Flow
+
+1. **User Input**: Player types action in terminal
+2. **UI Processing**: Bubble Tea model captures and validates input
+3. **Engine Processing**: Game engine interprets action in context
+4. **AI Generation**: Appropriate AI model generates response
+5. **State Update**: Game state updated with new information
+6. **Storage**: State changes persisted to disk
+7. **UI Update**: Interface refreshed with new content
+
+### Key Architectural Features
+
+#### Terminal Detection System
+
+```go
+type TerminalInfo struct {
+    Width            int    // Terminal dimensions
+    Height           int
+    ColorSupport     bool   // Feature capabilities
+    MouseSupport     bool
+    AltScreenSupport bool
+    TermType         string // Terminal identification
+    IsMinimal        bool   // Compatibility modes
+    IsSystemV        bool
+}
+```
+
+- **Multi-method Detection**: ioctl, environment, tput, stty
+- **Capability Assessment**: Color, mouse, alt-screen support
+- **Compatibility Modes**: Minimal and System V detection
+- **Safe Defaults**: Fallback to 80x24 with basic features
+
+#### AI Model Strategy
+
+```go
+func (c *Client) GetBestModel(task string) string {
+    switch task {
+    case "world_building":
+        return "anthropic/claude-3.5-sonnet"  // Rich detail
+    case "storytelling":
+        return "openai/gpt-4o"               // Narrative
+    case "rule_setting":
+        return "openai/gpt-4o-mini"          // Quick rules
+    case "dialogue":
+        return "anthropic/claude-3-haiku"    // Conversations
+    }
+}
+```
+
+- **Task-Specific Selection**: Different models for different purposes
+- **Performance Optimization**: Faster models for frequent operations
+- **Quality Balance**: High-quality models for important content
+- **Fallback Strategy**: Graceful degradation when models unavailable
+
+#### State Management
+
+```go
+type GameState struct {
+    World     *World         `json:"world"`      // World state
+    Player    *Player        `json:"player"`     // Character state
+    History   []HistoryEntry `json:"history"`    // Interaction log
+    Turn      int            `json:"turn"`       // Game progression
+    CreatedAt time.Time      `json:"created_at"` // Metadata
+    UpdatedAt time.Time      `json:"updated_at"`
+}
+```
+
+- **Immutable Updates**: State changes create new instances
+- **Complete Serialization**: Full state captured in save files
+- **Event Sourcing**: History preserves all interactions
+- **Version Tracking**: Timestamps for change tracking
+
+#### Logging Architecture
+
+```go
+// Structured logging with multiple levels
+type Logger struct {
+    debugLogger *log.Logger  // Detailed debugging
+    infoLogger  *log.Logger  // General information
+    errorLogger *log.Logger  // Error conditions
+    logFile     *os.File     // File handle
+}
+```
+
+- **Multi-level Logging**: Debug, Info, Error levels
+- **File-based Output**: Persistent log files for analysis
+- **Component-specific**: Specialized logging for different systems
+- **Performance Monitoring**: Runtime metrics and profiling
+
+### Design Patterns Used
+
+#### Model-View-Update (Elm Architecture)
+- **Model**: Game state and UI state
+- **View**: Terminal rendering functions
+- **Update**: State transition functions
+- **Commands**: Async operations (AI calls)
+
+#### Strategy Pattern
+- **AI Provider Selection**: Different APIs for different needs
+- **Terminal Rendering**: Adaptive output based on capabilities
+- **Storage Backends**: Pluggable persistence mechanisms
+
+#### Observer Pattern
+- **State Changes**: UI updates when state changes
+- **Configuration**: Settings changes propagate automatically
+- **Logging**: Events trigger appropriate log entries
+
+#### Factory Pattern
+- **AI Client Creation**: Based on available credentials
+- **Storage Creation**: Based on configuration
+- **UI Theme Creation**: Based on terminal capabilities
+
+### Extension Points
+
+#### Plugin Architecture (Planned)
+```go
+type Plugin interface {
+    Name() string
+    ProcessAction(action string, state *GameState) (*ActionResult, error)
+}
+```
+
+#### Custom AI Providers
+```go
+type AIProvider interface {
+    Generate(ctx context.Context, req *Request) (*Response, error)
+    GetModels() []string
+}
+```
+
+#### Storage Backends
+```go
+type Storage interface {
+    SaveGame(name string, state interface{}) error
+    LoadGame(name string, state interface{}) error
+}
+```
+
+### Performance Characteristics
+
+- **Memory Usage**: ~50MB typical, ~100MB with large histories
+- **Startup Time**: ~500ms including terminal detection
+- **Response Time**: 1-5 seconds for AI calls, instant for local commands
+- **File I/O**: JSON serialization, ~1MB typical save files
+- **Network**: HTTPS requests to AI providers, configurable timeouts
 
 ## Command Reference
 
