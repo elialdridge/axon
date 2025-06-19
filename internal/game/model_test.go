@@ -13,16 +13,16 @@ import (
 // Helper function to create test terminal info
 func createTestTerminalInfo() *terminal.TerminalInfo {
 	return &terminal.TerminalInfo{
-		Width:    80,
-		Height:   24,
-		TermType: "xterm-256color",
-		ColorSupport: true,
-		MouseSupport: true,
-		AltScreenSupport: true,
-		SupportsUTF8: true,
-		SupportsBold: true,
+		Width:             80,
+		Height:            24,
+		TermType:          "xterm-256color",
+		ColorSupport:      true,
+		MouseSupport:      true,
+		AltScreenSupport:  true,
+		SupportsUTF8:      true,
+		SupportsBold:      true,
 		SupportsUnderline: true,
-		SupportsReverse: true,
+		SupportsReverse:   true,
 	}
 }
 
@@ -42,8 +42,8 @@ func TestNewModel(t *testing.T) {
 	}
 
 	termInfo := &terminal.TerminalInfo{
-		Width:  80,
-		Height: 24,
+		Width:    80,
+		Height:   24,
 		TermType: "xterm-256color",
 	}
 	model := NewModel(cfg, termInfo)

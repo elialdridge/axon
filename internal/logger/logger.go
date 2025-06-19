@@ -16,7 +16,7 @@ var (
 // Init initializes the logger
 func Init() error {
 	var err error
-	logFile, err = os.OpenFile("axon_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	logFile, err = os.OpenFile("axon_debug.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
@@ -76,4 +76,3 @@ func LogGameState(state interface{}) {
 func LogWorldCreation(step string, data interface{}) {
 	Info("World Creation - %s: %+v", step, data)
 }
-

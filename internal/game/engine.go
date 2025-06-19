@@ -9,6 +9,13 @@ import (
 	"axon/internal/logger"
 )
 
+const (
+	// String constants for entry types
+	entryTypePlayer   = "player"
+	entryTypeNarrator = "narrator"
+	entryTypeSystem   = "system"
+)
+
 // Engine represents the game engine
 type Engine struct {
 	aiClient *ai.Client
@@ -73,8 +80,8 @@ func (e *Engine) InitializeWorld(state *GameState, seedPrompt string) error {
 		state.World.Rules = themeWorld.Rules
 		state.World.CurrentLocation = themeWorld.CurrentLocation
 		state.World.Locations[themeWorld.CurrentLocation] = themeWorld.Description
-		state.AddHistoryEntry("narrator", themeWorld.Description)
-		state.AddHistoryEntry("narrator", "The mists of reality shimmer and coalesce, drawing upon ancient memories and forgotten tales to weave this world into existence...")
+		state.AddHistoryEntry(entryTypeNarrator, themeWorld.Description)
+		state.AddHistoryEntry(entryTypeNarrator, "The mists of reality shimmer and coalesce, drawing upon ancient memories and forgotten tales to weave this world into existence...")
 	} else {
 		logger.Info("AI world creation successful, parsing response")
 		logger.LogWorldCreation("ai_success", resp.Text)
@@ -85,7 +92,7 @@ func (e *Engine) InitializeWorld(state *GameState, seedPrompt string) error {
 		state.World.Rules = []string{"AI-driven narrative", "Player choices matter"}
 		state.World.CurrentLocation = "Starting Point"
 		state.World.Locations["Starting Point"] = resp.Text
-		state.AddHistoryEntry("narrator", resp.Text)
+		state.AddHistoryEntry(entryTypeNarrator, resp.Text)
 	}
 
 	logger.LogGameState(state)
@@ -97,7 +104,7 @@ func (e *Engine) InitializeWorld(state *GameState, seedPrompt string) error {
 func (e *Engine) ProcessPlayerAction(state *GameState, action string) error {
 	logger.Info("Processing player action: %s", action)
 	// Add player action to history
-	state.AddHistoryEntry("player", action)
+	state.AddHistoryEntry(entryTypePlayer, action)
 
 	// Get recent history for context
 	recentHistory := state.GetRecentHistory(10)
@@ -152,11 +159,11 @@ func (e *Engine) ProcessPlayerAction(state *GameState, action string) error {
 		logger.Error("AI response contains error: %v", resp.Error)
 		// Immersive fallback response based on action type
 		fallbackResponse := e.generateFallbackResponse(action, state)
-		state.AddHistoryEntry("narrator", fallbackResponse)
+		state.AddHistoryEntry(entryTypeNarrator, fallbackResponse)
 	} else {
 		logger.Info("AI action processing successful")
 		logger.Debug("AI response: %s", resp.Text)
-		state.AddHistoryEntry("narrator", resp.Text)
+		state.AddHistoryEntry(entryTypeNarrator, resp.Text)
 	}
 
 	// Advance turn
@@ -172,25 +179,25 @@ func (e *Engine) handleSystemAction(state *GameState, action string) error {
 	switch {
 	case strings.Contains(actionLower, "inventory"):
 		if len(state.Player.Inventory) == 0 {
-			state.AddHistoryEntry("system", "Your inventory is empty.")
+			state.AddHistoryEntry(entryTypeSystem, "Your inventory is empty.")
 		} else {
 			inventoryList := "Inventory:\n"
 			for _, item := range state.Player.Inventory {
 				inventoryList += fmt.Sprintf("- %s (x%d): %s\n", item.Name, item.Quantity, item.Description)
 			}
-			state.AddHistoryEntry("system", inventoryList)
+			state.AddHistoryEntry(entryTypeSystem, inventoryList)
 		}
 
-	case strings.Contains(actionLower, "stats"):
-		if len(state.Player.Stats) == 0 {
-			state.AddHistoryEntry("system", "No stats to display.")
-		} else {
-			statsList := "Character Stats:\n"
-			for stat, value := range state.Player.Stats {
-				statsList += fmt.Sprintf("- %s: %d\n", stat, value)
+		case strings.Contains(actionLower, "stats"):
+			if len(state.Player.Stats) == 0 {
+				state.AddHistoryEntry(entryTypeSystem, "No stats to display.")
+			} else {
+				statsList := "Character Stats:\n"
+				for stat, value := range state.Player.Stats {
+					statsList += fmt.Sprintf("- %s: %d\n", stat, value)
+				}
+				state.AddHistoryEntry(entryTypeSystem, statsList)
 			}
-			state.AddHistoryEntry("system", statsList)
-		}
 
 	case strings.Contains(actionLower, "help"):
 		helpText := `Available commands:
@@ -200,10 +207,10 @@ func (e *Engine) handleSystemAction(state *GameState, action string) error {
 - 'save [name]' to save your game
 - 'load [name]' to load a saved game
 - 'quit' to exit the game`
-		state.AddHistoryEntry("system", helpText)
+		state.AddHistoryEntry(entryTypeSystem, helpText)
 
 	default:
-		state.AddHistoryEntry("system", "Unknown system command. Type 'help' for available commands.")
+		state.AddHistoryEntry(entryTypeSystem, "Unknown system command. Type 'help' for available commands.")
 	}
 
 	return nil
@@ -272,59 +279,59 @@ func (e *Engine) createThemedWorld(seedPrompt string) *World {
 	// Cyberpunk themes
 	if strings.Contains(lower, "cyberpunk") || strings.Contains(lower, "2077") || strings.Contains(lower, "cyber") {
 		return &World{
-			Name: "Neo-Tokyo 2077",
-			Description: "Towering neon-lit skyscrapers pierce the smoggy sky above rain-slicked streets. Corporate megastructures cast shadows over bustling markets where cybernetic implants gleam under holographic advertisements. You stand at the edge of the underground district, where rebels and hackers gather in the shadows.",
-			Setting: "Cyberpunk",
-			Rules: []string{"Technology rules all", "Corporate power is absolute", "Information is currency", "Trust no one"},
+			Name:            "Neo-Tokyo 2077",
+			Description:     "Towering neon-lit skyscrapers pierce the smoggy sky above rain-slicked streets. Corporate megastructures cast shadows over bustling markets where cybernetic implants gleam under holographic advertisements. You stand at the edge of the underground district, where rebels and hackers gather in the shadows.",
+			Setting:         "Cyberpunk",
+			Rules:           []string{"Technology rules all", "Corporate power is absolute", "Information is currency", "Trust no one"},
 			CurrentLocation: "Underground District",
-			Locations: make(map[string]string),
+			Locations:       make(map[string]string),
 		}
 	}
 
 	// Fantasy themes
 	if strings.Contains(lower, "fantasy") || strings.Contains(lower, "medieval") || strings.Contains(lower, "kingdom") || strings.Contains(lower, "magic") {
 		return &World{
-			Name: "Realm of Eldoria",
-			Description: "Ancient stone towers rise from mist-covered valleys where dragons once soared. Cobblestone paths wind through enchanted forests filled with mysterious creatures. You find yourself at the edge of a village where flickering torches cast dancing shadows on thatched roofs.",
-			Setting: "High Fantasy",
-			Rules: []string{"Magic flows through all things", "Ancient powers stir", "Honor above all", "Knowledge is power"},
+			Name:            "Realm of Eldoria",
+			Description:     "Ancient stone towers rise from mist-covered valleys where dragons once soared. Cobblestone paths wind through enchanted forests filled with mysterious creatures. You find yourself at the edge of a village where flickering torches cast dancing shadows on thatched roofs.",
+			Setting:         "High Fantasy",
+			Rules:           []string{"Magic flows through all things", "Ancient powers stir", "Honor above all", "Knowledge is power"},
 			CurrentLocation: "Village Edge",
-			Locations: make(map[string]string),
+			Locations:       make(map[string]string),
 		}
 	}
 
 	// Space/Sci-fi themes
 	if strings.Contains(lower, "space") || strings.Contains(lower, "station") || strings.Contains(lower, "galaxy") || strings.Contains(lower, "alien") {
 		return &World{
-			Name: "Frontier Station Alpha",
-			Description: "The vast expanse of space stretches endlessly beyond reinforced viewports. This research station orbits a mysterious planet where strange energy readings emanate from the surface. Emergency lights flicker in the corridors as you hear the hum of life support systems working overtime.",
-			Setting: "Space Opera",
-			Rules: []string{"The void is unforgiving", "Technology can fail", "First contact protocols exist", "Survival is paramount"},
+			Name:            "Frontier Station Alpha",
+			Description:     "The vast expanse of space stretches endlessly beyond reinforced viewports. This research station orbits a mysterious planet where strange energy readings emanate from the surface. Emergency lights flicker in the corridors as you hear the hum of life support systems working overtime.",
+			Setting:         "Space Opera",
+			Rules:           []string{"The void is unforgiving", "Technology can fail", "First contact protocols exist", "Survival is paramount"},
 			CurrentLocation: "Station Corridor",
-			Locations: make(map[string]string),
+			Locations:       make(map[string]string),
 		}
 	}
 
 	// Post-apocalyptic themes
 	if strings.Contains(lower, "apocalyptic") || strings.Contains(lower, "wasteland") || strings.Contains(lower, "survivor") || strings.Contains(lower, "ruins") {
 		return &World{
-			Name: "The Shattered Lands",
-			Description: "Crumbling ruins of civilization stretch across a barren landscape under an eternally grey sky. Rusted vehicles and collapsed buildings tell the story of a world that once was. You emerge from a makeshift shelter, scanning the horizon for signs of other survivors or threats.",
-			Setting: "Post-Apocalyptic",
-			Rules: []string{"Resources are scarce", "Trust is earned", "The past is gone", "Adapt or perish"},
+			Name:            "The Shattered Lands",
+			Description:     "Crumbling ruins of civilization stretch across a barren landscape under an eternally grey sky. Rusted vehicles and collapsed buildings tell the story of a world that once was. You emerge from a makeshift shelter, scanning the horizon for signs of other survivors or threats.",
+			Setting:         "Post-Apocalyptic",
+			Rules:           []string{"Resources are scarce", "Trust is earned", "The past is gone", "Adapt or perish"},
 			CurrentLocation: "Wasteland Outpost",
-			Locations: make(map[string]string),
+			Locations:       make(map[string]string),
 		}
 	}
 
 	// Default modern/mystery theme
 	return &World{
-		Name: "The Unknown",
-		Description: "You find yourself in a place that defies easy description. Familiar yet strange, ordinary yet filled with hidden possibilities. The air itself seems to whisper of secrets waiting to be discovered and adventures yet to unfold.",
-		Setting: "Modern Mystery",
-		Rules: []string{"Nothing is as it seems", "Every choice matters", "Mysteries abound", "Reality is flexible"},
+		Name:            "The Unknown",
+		Description:     "You find yourself in a place that defies easy description. Familiar yet strange, ordinary yet filled with hidden possibilities. The air itself seems to whisper of secrets waiting to be discovered and adventures yet to unfold.",
+		Setting:         "Modern Mystery",
+		Rules:           []string{"Nothing is as it seems", "Every choice matters", "Mysteries abound", "Reality is flexible"},
 		CurrentLocation: "Starting Point",
-		Locations: make(map[string]string),
+		Locations:       make(map[string]string),
 	}
 }
 

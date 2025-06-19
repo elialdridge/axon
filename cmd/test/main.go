@@ -11,7 +11,18 @@ import (
 
 // Simple integration test to verify game functionality
 func main() {
-	// Check if API key is available
+	cfg := setupTest()
+	engine, state := createGameEngine(cfg)
+
+	testWorldGeneration(engine, state)
+	testPlayerActions(engine, state)
+	testActionSuggestions(engine, state)
+	testSystemCommands(engine, state)
+
+	printFinalResults(state)
+}
+
+func setupTest() *config.Config {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
 		fmt.Println("OPENROUTER_API_KEY not set, cannot run integration test")
@@ -20,8 +31,7 @@ func main() {
 
 	fmt.Println("🎮 Starting Axon Game Integration Test...")
 
-	// Create configuration
-	cfg := &config.Config{
+	return &config.Config{
 		AI: config.AIConfig{
 			OpenRouterAPIKey: apiKey,
 			GeminiAPIKey:     "",
@@ -37,14 +47,17 @@ func main() {
 			ColorEnabled: false,
 		},
 	}
+}
 
-	// Create game engine
+func createGameEngine(cfg *config.Config) (*game.Engine, *game.GameState) {
 	engine := game.NewEngine(cfg)
 	state := game.NewGameState()
+	return engine, state
+}
 
+func testWorldGeneration(engine *game.Engine, state *game.GameState) {
 	fmt.Println("\n📡 Testing world generation...")
 
-	// Test world generation
 	errorMessage := engine.InitializeWorld(state, "A mysterious forest clearing with ancient ruins")
 	if errorMessage != nil {
 		fmt.Printf("❌ World generation failed: %v\n", errorMessage)
@@ -56,17 +69,17 @@ func main() {
 	fmt.Printf("   Location: %s\n", state.World.CurrentLocation)
 	fmt.Printf("   History entries: %d\n", len(state.History))
 
-	// Print world description from history
 	for _, entry := range state.History {
 		if entry.Type == "narrator" {
 			fmt.Printf("   Description: %s\n", entry.Content)
 			break
 		}
 	}
+}
 
+func testPlayerActions(engine *game.Engine, state *game.GameState) {
 	fmt.Println("\n🎲 Testing player actions...")
 
-	// Test various player actions
 	actions := []string{
 		"look around carefully",
 		"examine the ancient ruins",
@@ -74,7 +87,6 @@ func main() {
 	}
 
 	for i, action := range actions {
-		// Add delay to avoid rate limiting
 		if i > 0 {
 			time.Sleep(2 * time.Second)
 		}
@@ -88,7 +100,6 @@ func main() {
 			continue
 		}
 
-		// Find and print the AI response
 		for j := prevHistoryCount; j < len(state.History); j++ {
 			entry := state.History[j]
 			if entry.Type == "narrator" {
@@ -99,10 +110,11 @@ func main() {
 
 		fmt.Printf("   ✅ Action processed (Turn: %d)\n\n", state.Turn)
 	}
+}
 
+func testActionSuggestions(engine *game.Engine, state *game.GameState) {
 	fmt.Println("💡 Testing action suggestions...")
 
-	// Test action suggestions
 	suggestions, err := engine.GenerateActionSuggestions(state)
 	if err != nil {
 		fmt.Printf("❌ Action suggestions failed: %v\n", err)
@@ -112,10 +124,11 @@ func main() {
 			fmt.Printf("   %d. %s\n", i+1, suggestion)
 		}
 	}
+}
 
+func testSystemCommands(engine *game.Engine, state *game.GameState) {
 	fmt.Println("\n📊 Testing system commands...")
 
-	// Test system commands
 	systemCommands := []string{"inventory", "stats", "help"}
 	for _, cmd := range systemCommands {
 		fmt.Printf("   > %s\n", cmd)
@@ -127,7 +140,6 @@ func main() {
 			continue
 		}
 
-		// Find and print the system response
 		for j := prevHistoryCount; j < len(state.History); j++ {
 			entry := state.History[j]
 			if entry.Type == "system" {
@@ -137,7 +149,9 @@ func main() {
 		}
 		fmt.Printf("   ✅ Command processed\n\n")
 	}
+}
 
+func printFinalResults(state *game.GameState) {
 	fmt.Printf("\n🎉 Integration test completed successfully!\n")
 	fmt.Printf("   Final turn: %d\n", state.Turn)
 	fmt.Printf("   Total history entries: %d\n", len(state.History))
@@ -146,4 +160,3 @@ func main() {
 
 	fmt.Println("\n✨ The game is fully functional and ready to play!")
 }
-

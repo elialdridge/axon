@@ -233,7 +233,7 @@ func TestActionSuggestionsIntegration(t *testing.T) {
 	t.Logf("Generated %d action suggestions:", len(suggestions))
 	for i, suggestion := range suggestions {
 		t.Logf("  %d. %s", i+1, suggestion)
-		
+
 		// Verify suggestions are not empty
 		if strings.TrimSpace(suggestion) == "" {
 			t.Errorf("Suggestion %d should not be empty", i+1)
@@ -266,4 +266,3 @@ func TestActionSuggestionsIntegration(t *testing.T) {
 		t.Logf("  %d. %s", i+1, suggestion)
 	}
 }
-

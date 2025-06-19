@@ -17,37 +17,37 @@ func TestDetectTerminal(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name           string
-		term           string
-		termProgram    string
+		name            string
+		term            string
+		termProgram     string
 		expectedMinimal bool
 		expectedSystemV bool
 	}{
 		{
-			name:           "xterm modern terminal",
-			term:           "xterm-256color",
-			termProgram:    "",
+			name:            "xterm modern terminal",
+			term:            "xterm-256color",
+			termProgram:     "",
 			expectedMinimal: false,
 			expectedSystemV: false,
 		},
 		{
-			name:           "dumb terminal",
-			term:           "dumb",
-			termProgram:    "",
+			name:            "dumb terminal",
+			term:            "dumb",
+			termProgram:     "",
 			expectedMinimal: true,
 			expectedSystemV: false,
 		},
 		{
-			name:           "vt100 terminal",
-			term:           "vt100",
-			termProgram:    "",
+			name:            "vt100 terminal",
+			term:            "vt100",
+			termProgram:     "",
 			expectedMinimal: true,
 			expectedSystemV: true,
 		},
 		{
-			name:           "empty terminal",
-			term:           "",
-			termProgram:    "",
+			name:            "empty terminal",
+			term:            "",
+			termProgram:     "",
 			expectedMinimal: true,
 			expectedSystemV: false,
 		},
@@ -60,13 +60,13 @@ func TestDetectTerminal(t *testing.T) {
 			// Clear CI variable to avoid interference with test expectations
 			os.Unsetenv("CI")
 			os.Unsetenv("BUILD")
-			
+
 			info := DetectTerminal()
-			
+
 			if info.IsMinimal != tt.expectedMinimal {
 				t.Errorf("Expected IsMinimal %v, got %v", tt.expectedMinimal, info.IsMinimal)
 			}
-			
+
 			if info.IsSystemV != tt.expectedSystemV {
 				t.Errorf("Expected IsSystemV %v, got %v", tt.expectedSystemV, info.IsSystemV)
 			}
@@ -111,13 +111,13 @@ func TestGetSafeSize(t *testing.T) {
 				Width:  tt.width,
 				Height: tt.height,
 			}
-			
+
 			w, h := info.GetSafeSize()
-			
+
 			if w != tt.expectedWidth {
 				t.Errorf("Expected width %d, got %d", tt.expectedWidth, w)
 			}
-			
+
 			if h != tt.expectedHeight {
 				t.Errorf("Expected height %d, got %d", tt.expectedHeight, h)
 			}
@@ -160,11 +160,11 @@ func TestStripFormatting(t *testing.T) {
 
 func TestFormatForTerminal(t *testing.T) {
 	tests := []struct {
-		name      string
-		minimal   bool
-		systemV   bool
-		input     string
-		expected  string
+		name     string
+		minimal  bool
+		systemV  bool
+		input    string
+		expected string
 	}{
 		{
 			name:     "normal terminal",
@@ -195,7 +195,7 @@ func TestFormatForTerminal(t *testing.T) {
 				IsMinimal: tt.minimal,
 				IsSystemV: tt.systemV,
 			}
-			
+
 			result := info.FormatForTerminal(tt.input)
 			if result != tt.expected {
 				t.Errorf("Expected %q, got %q", tt.expected, result)
@@ -206,11 +206,11 @@ func TestFormatForTerminal(t *testing.T) {
 
 func TestGetCompatibleOptions(t *testing.T) {
 	tests := []struct {
-		name        string
-		minimal     bool
-		systemV     bool
+		name         string
+		minimal      bool
+		systemV      bool
 		mouseSupport bool
-		altScreen   bool
+		altScreen    bool
 		expectedOpts []string
 	}{
 		{
@@ -247,13 +247,13 @@ func TestGetCompatibleOptions(t *testing.T) {
 				MouseSupport:     tt.mouseSupport,
 				AltScreenSupport: tt.altScreen,
 			}
-			
+
 			options := info.GetCompatibleOptions()
-			
+
 			if len(options) != len(tt.expectedOpts) {
 				t.Errorf("Expected %d options, got %d", len(tt.expectedOpts), len(options))
 			}
-			
+
 			for i, expected := range tt.expectedOpts {
 				if i >= len(options) || options[i] != expected {
 					t.Errorf("Expected option %q at index %d, got %q", expected, i, options[i])
@@ -271,41 +271,41 @@ func TestDetectCapabilities(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name         string
-		term         string
-		colorTerm    string
+		name          string
+		term          string
+		colorTerm     string
 		expectedColor bool
 		expectedMouse bool
 		expectedUTF8  bool
 	}{
 		{
-			name:         "xterm with color",
-			term:         "xterm-256color",
-			colorTerm:    "",
+			name:          "xterm with color",
+			term:          "xterm-256color",
+			colorTerm:     "",
 			expectedColor: true,
 			expectedMouse: true,
 			expectedUTF8:  true,
 		},
 		{
-			name:         "dumb terminal",
-			term:         "dumb",
-			colorTerm:    "",
+			name:          "dumb terminal",
+			term:          "dumb",
+			colorTerm:     "",
 			expectedColor: false,
 			expectedMouse: false,
 			expectedUTF8:  false,
 		},
 		{
-			name:         "linux console",
-			term:         "linux",
-			colorTerm:    "",
+			name:          "linux console",
+			term:          "linux",
+			colorTerm:     "",
 			expectedColor: true,
 			expectedMouse: false,
 			expectedUTF8:  false,
 		},
 		{
-			name:         "forced color support",
-			term:         "dumb",
-			colorTerm:    "truecolor",
+			name:          "forced color support",
+			term:          "dumb",
+			colorTerm:     "truecolor",
 			expectedColor: true,
 			expectedMouse: false,
 			expectedUTF8:  false,
@@ -315,22 +315,21 @@ func TestDetectCapabilities(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			os.Setenv("COLORTERM", tt.colorTerm)
-			
+
 			info := &TerminalInfo{TermType: tt.term}
 			info.detectCapabilities()
-			
+
 			if info.ColorSupport != tt.expectedColor {
 				t.Errorf("Expected ColorSupport %v, got %v", tt.expectedColor, info.ColorSupport)
 			}
-			
+
 			if info.MouseSupport != tt.expectedMouse {
 				t.Errorf("Expected MouseSupport %v, got %v", tt.expectedMouse, info.MouseSupport)
 			}
-			
+
 			if info.SupportsUTF8 != tt.expectedUTF8 {
 				t.Errorf("Expected SupportsUTF8 %v, got %v", tt.expectedUTF8, info.SupportsUTF8)
 			}
 		})
 	}
 }
-

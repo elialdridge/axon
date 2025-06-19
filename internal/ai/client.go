@@ -12,6 +12,11 @@ import (
 	"axon/internal/logger"
 )
 
+const (
+	// Default model for free tier usage
+	defaultModel = "mistralai/mistral-7b-instruct:free"
+)
+
 // Client represents an AI API client
 type Client struct {
 	openRouterKey string
@@ -192,14 +197,14 @@ func (c *Client) GetBestModel(task string) string {
 	// Use fastest free models for reliable response times
 	switch task {
 	case "world_building":
-		return "mistralai/mistral-7b-instruct:free" // Very fast free model
+		return defaultModel // Very fast free model
 	case "storytelling":
-		return "mistralai/mistral-7b-instruct:free"
+		return defaultModel
 	case "rule_setting":
-		return "mistralai/mistral-7b-instruct:free"
+		return defaultModel
 	case "dialog":
-		return "mistralai/mistral-7b-instruct:free"
+		return defaultModel
 	default:
-		return "mistralai/mistral-7b-instruct:free"
+		return defaultModel
 	}
 }

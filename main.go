@@ -14,10 +14,7 @@ import (
 
 func main() {
 	// Initialize logger
-	if err := logger.Init(); err != nil {
-		fmt.Printf("Failed to initialize logger: %v\n", err)
-		os.Exit(1)
-	}
+	logger.Init()
 	defer logger.Close()
 
 	logger.Info("Starting Axon game")

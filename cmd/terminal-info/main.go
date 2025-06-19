@@ -18,7 +18,9 @@ func main() {
 
 	// Initialize minimal logger for this utility
 	if *verbose {
-		logger.Init()
+	if err := logger.Init(); err != nil {
+		fmt.Printf("Warning: Failed to initialize logger: %v\n", err)
+	}
 		defer logger.Close()
 	}
 
@@ -32,13 +34,13 @@ func main() {
 	}
 
 	// Exit with specific codes for minimal/SystemV detection
+	exitCode := 0
 	if termInfo.IsMinimal {
-		os.Exit(2) // Exit code 2 for minimal terminal
+		exitCode = 2 // Exit code 2 for minimal terminal
+	} else if termInfo.IsSystemV {
+		exitCode = 3 // Exit code 3 for System V terminal
 	}
-	if termInfo.IsSystemV {
-		os.Exit(3) // Exit code 3 for System V terminal
-	}
-	os.Exit(0) // Exit code 0 for modern terminal
+	os.Exit(exitCode)
 }
 
 func printJSON(info *terminal.TerminalInfo) {
@@ -120,4 +122,3 @@ func printCapability(name string, supported bool) {
 		fmt.Printf("  [ ] %s\n", name)
 	}
 }
-

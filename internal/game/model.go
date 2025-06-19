@@ -238,7 +238,7 @@ func (m Model) handleGameAction() (tea.Model, tea.Cmd) {
 		if err != nil {
 			m.errorMessage = fmt.Sprintf("Error saving game: %v", err)
 		} else {
-			m.gameState.AddHistoryEntry("system", "Game saved successfully.")
+			m.gameState.AddHistoryEntry(entryTypeSystem, "Game saved successfully.")
 		}
 		return m, nil
 	}
@@ -256,7 +256,7 @@ func (m Model) handleGameAction() (tea.Model, tea.Cmd) {
 			m.errorMessage = fmt.Sprintf("Error loading game: %v", err)
 		} else {
 			m.gameState = &loadedState
-			m.gameState.AddHistoryEntry("system", "Game loaded successfully.")
+			m.gameState.AddHistoryEntry(entryTypeSystem, "Game loaded successfully.")
 		}
 		return m, nil
 	}
@@ -513,7 +513,7 @@ func (m Model) wrapTextToLinesWidth(text string, width int) []string {
 			lines = append(lines, currentLine.String())
 			currentLine.Reset()
 		}
-		
+
 		// Add word to current line
 		if currentLine.Len() > 0 {
 			currentLine.WriteString(" ")
