@@ -92,12 +92,8 @@ jobs:
       uses: actions/github-script@v7
       with:
         script: |
-          await github.rest.issues.addAssignees({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.issue.number,
-            assignees: ['@security-team'] // Replace with actual usernames
-          });
+          // Note: Replace with actual maintainer usernames when repository has maintainers
+          console.log('Security issue detected - would assign to security team');
     
     - name: Set priority labels
       uses: actions/github-script@v7

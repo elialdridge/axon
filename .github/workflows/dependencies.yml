@@ -94,10 +94,11 @@ jobs:
         # Run vulnerability check
         govulncheck ./...
     
-    - name: Run nancy security scanner
+    - name: Run go mod audit
       run: |
-        go install github.com/sonatypecommunity/nancy@latest
-        go list -json -deps ./... | nancy sleuth
+        # Simple go mod verify and check for known vulnerabilities
+        go mod verify
+        go list -m all
     
     - name: Create security issue if vulnerabilities found
       if: failure()

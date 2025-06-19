@@ -34,11 +34,11 @@ func TestGetBestModel(t *testing.T) {
 		task     string
 		expected string
 	}{
-		{"world_building", "anthropic/claude-3.5-sonnet"},
-		{"storytelling", "openai/gpt-4o"},
-		{"rule_setting", "openai/gpt-4o-mini"},
-		{"dialog", "anthropic/claude-3-haiku"},
-		{"unknown_task", "openai/gpt-4o-mini"},
+		{"world_building", "mistralai/mistral-7b-instruct:free"},
+		{"storytelling", "mistralai/mistral-7b-instruct:free"},
+		{"rule_setting", "mistralai/mistral-7b-instruct:free"},
+		{"dialog", "mistralai/mistral-7b-instruct:free"},
+		{"unknown_task", "mistralai/mistral-7b-instruct:free"},
 	}
 
 	for _, test := range tests {

@@ -25,7 +25,7 @@ func NewClient(openRouterKey, geminiKey string) *Client {
 		openRouterKey: openRouterKey,
 		geminiKey:     geminiKey,
 		httpClient: &http.Client{
-			Timeout: 60 * time.Second, // Increased to 60 seconds
+			Timeout: 30 * time.Second,
 		},
 	}
 }

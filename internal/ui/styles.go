@@ -18,30 +18,57 @@ type Styles struct {
 	Scrollbar     lipgloss.Style
 }
 
-// NewStyles creates new simple ASCII-only styles
+// NewStyles creates new monochrome styles following project design
 func NewStyles() *Styles {
+	// Define monochrome color scheme
+	white := lipgloss.Color("#FFFFFF")
+	black := lipgloss.Color("#000000")
+
 	return &Styles{
-		Base: lipgloss.NewStyle(),
+		Base: lipgloss.NewStyle().
+			Foreground(white).
+			Background(black),
 
 		HistoryPanel: lipgloss.NewStyle().
+			Foreground(white).
+			Background(black).
 			Padding(0, 1),
 
 		InputPanel: lipgloss.NewStyle().
-			Padding(0, 1),
+			Foreground(white).
+			Background(black).
+			Padding(0, 1).
+			BorderTop(true).
+			BorderStyle(lipgloss.NormalBorder()),
 
-		PlayerText: lipgloss.NewStyle(),
+		PlayerText: lipgloss.NewStyle().
+			Foreground(white).
+			Bold(true),
 
-		NarratorText: lipgloss.NewStyle(),
+		NarratorText: lipgloss.NewStyle().
+			Foreground(white),
 
-		SystemText: lipgloss.NewStyle(),
+		SystemText: lipgloss.NewStyle().
+			Foreground(white).
+			Italic(true),
 
-		InventoryText: lipgloss.NewStyle(),
+		InventoryText: lipgloss.NewStyle().
+			Foreground(white).
+			Faint(true),
 
-		Border: lipgloss.NewStyle(),
+		Border: lipgloss.NewStyle().
+			BorderTop(true).
+			BorderBottom(true).
+			BorderLeft(true).
+			BorderRight(true).
+			BorderStyle(lipgloss.NormalBorder()),
 
-		Prompt: lipgloss.NewStyle(),
+		Prompt: lipgloss.NewStyle().
+			Foreground(white).
+			Bold(true),
 
-		Scrollbar: lipgloss.NewStyle(),
+		Scrollbar: lipgloss.NewStyle().
+			Foreground(white),
 	}
 }
 
