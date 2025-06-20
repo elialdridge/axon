@@ -18,9 +18,9 @@ func main() {
 
 	// Initialize minimal logger for this utility
 	if *verbose {
-	if err := logger.Init(); err != nil {
-		fmt.Printf("Warning: Failed to initialize logger: %v\n", err)
-	}
+		if err := logger.Init(); err != nil {
+			fmt.Printf("Warning: Failed to initialize logger: %v\n", err)
+		}
 		defer logger.Close()
 	}
 
@@ -40,7 +40,7 @@ func main() {
 	} else if termInfo.IsSystemV {
 		exitCode = 3 // Exit code 3 for System V terminal
 	}
-	
+
 	// If logger was initialized, close it before exiting
 	if *verbose {
 		logger.Close()

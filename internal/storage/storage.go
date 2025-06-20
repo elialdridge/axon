@@ -23,7 +23,7 @@ func NewStorage(saveDir string) *Storage {
 // SaveGame saves the game state to disk
 func (s *Storage) SaveGame(name string, state interface{}) error {
 	// Ensure save directory exists
-	if err := os.MkdirAll(s.saveDir, 0755); err != nil {
+	if err := os.MkdirAll(s.saveDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create save directory: %w", err)
 	}
 
@@ -41,7 +41,7 @@ func (s *Storage) SaveGame(name string, state interface{}) error {
 	}
 
 	// Write to file
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
+	if err := os.WriteFile(filePath, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write save file: %w", err)
 	}
 

@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"axon/internal/config"
 	"axon/internal/game"
 	"axon/internal/logger"
 	"axon/internal/terminal"
-
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {

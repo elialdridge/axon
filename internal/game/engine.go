@@ -81,7 +81,10 @@ func (e *Engine) InitializeWorld(state *GameState, seedPrompt string) error {
 		state.World.CurrentLocation = themeWorld.CurrentLocation
 		state.World.Locations[themeWorld.CurrentLocation] = themeWorld.Description
 		state.AddHistoryEntry(entryTypeNarrator, themeWorld.Description)
-		state.AddHistoryEntry(entryTypeNarrator, "The mists of reality shimmer and coalesce, drawing upon ancient memories and forgotten tales to weave this world into existence...")
+		state.AddHistoryEntry(
+			entryTypeNarrator,
+			"The mists of reality shimmer and coalesce, drawing upon ancient memories and forgotten tales to weave this world into existence...",
+		)
 	} else {
 		logger.Info("AI world creation successful, parsing response")
 		logger.LogWorldCreation("ai_success", resp.Text)
@@ -188,16 +191,16 @@ func (e *Engine) handleSystemAction(state *GameState, action string) error {
 			state.AddHistoryEntry(entryTypeSystem, inventoryList)
 		}
 
-		case strings.Contains(actionLower, "stats"):
-			if len(state.Player.Stats) == 0 {
-				state.AddHistoryEntry(entryTypeSystem, "No stats to display.")
-			} else {
-				statsList := "Character Stats:\n"
-				for stat, value := range state.Player.Stats {
-					statsList += fmt.Sprintf("- %s: %d\n", stat, value)
-				}
-				state.AddHistoryEntry(entryTypeSystem, statsList)
+	case strings.Contains(actionLower, "stats"):
+		if len(state.Player.Stats) == 0 {
+			state.AddHistoryEntry(entryTypeSystem, "No stats to display.")
+		} else {
+			statsList := "Character Stats:\n"
+			for stat, value := range state.Player.Stats {
+				statsList += fmt.Sprintf("- %s: %d\n", stat, value)
 			}
+			state.AddHistoryEntry(entryTypeSystem, statsList)
+		}
 
 	case strings.Contains(actionLower, "help"):
 		helpText := `Available commands:
@@ -299,23 +302,34 @@ func (e *Engine) isCyberpunkTheme(lower string) bool {
 }
 
 func (e *Engine) isFantasyTheme(lower string) bool {
-	return strings.Contains(lower, "fantasy") || strings.Contains(lower, "medieval") || strings.Contains(lower, "kingdom") || strings.Contains(lower, "magic")
+	return strings.Contains(lower, "fantasy") || strings.Contains(lower, "medieval") ||
+		strings.Contains(lower, "kingdom") ||
+		strings.Contains(lower, "magic")
 }
 
 func (e *Engine) isSpaceTheme(lower string) bool {
-	return strings.Contains(lower, "space") || strings.Contains(lower, "station") || strings.Contains(lower, "galaxy") || strings.Contains(lower, "alien")
+	return strings.Contains(lower, "space") || strings.Contains(lower, "station") ||
+		strings.Contains(lower, "galaxy") ||
+		strings.Contains(lower, "alien")
 }
 
 func (e *Engine) isApocalypticTheme(lower string) bool {
-	return strings.Contains(lower, "apocalyptic") || strings.Contains(lower, "wasteland") || strings.Contains(lower, "survivor") || strings.Contains(lower, "ruins")
+	return strings.Contains(lower, "apocalyptic") || strings.Contains(lower, "wasteland") ||
+		strings.Contains(lower, "survivor") ||
+		strings.Contains(lower, "ruins")
 }
 
 func (e *Engine) createCyberpunkWorld() *World {
 	return &World{
-		Name:            "Neo-Tokyo 2077",
-		Description:     "Towering neon-lit skyscrapers pierce the smoggy sky above rain-slicked streets. Corporate megastructures cast shadows over bustling markets where cybernetic implants gleam under holographic advertisements. You stand at the edge of the underground district, where rebels and hackers gather in the shadows.",
-		Setting:         "Cyberpunk",
-		Rules:           []string{"Technology rules all", "Corporate power is absolute", "Information is currency", "Trust no one"},
+		Name:        "Neo-Tokyo 2077",
+		Description: "Towering neon-lit skyscrapers pierce the smoggy sky above rain-slicked streets. Corporate megastructures cast shadows over bustling markets where cybernetic implants gleam under holographic advertisements. You stand at the edge of the underground district, where rebels and hackers gather in the shadows.",
+		Setting:     "Cyberpunk",
+		Rules: []string{
+			"Technology rules all",
+			"Corporate power is absolute",
+			"Information is currency",
+			"Trust no one",
+		},
 		CurrentLocation: "Underground District",
 		Locations:       make(map[string]string),
 	}
@@ -323,10 +337,15 @@ func (e *Engine) createCyberpunkWorld() *World {
 
 func (e *Engine) createFantasyWorld() *World {
 	return &World{
-		Name:            "Realm of Eldoria",
-		Description:     "Ancient stone towers rise from mist-covered valleys where dragons once soared. Cobblestone paths wind through enchanted forests filled with mysterious creatures. You find yourself at the edge of a village where flickering torches cast dancing shadows on thatched roofs.",
-		Setting:         "High Fantasy",
-		Rules:           []string{"Magic flows through all things", "Ancient powers stir", "Honor above all", "Knowledge is power"},
+		Name:        "Realm of Eldoria",
+		Description: "Ancient stone towers rise from mist-covered valleys where dragons once soared. Cobblestone paths wind through enchanted forests filled with mysterious creatures. You find yourself at the edge of a village where flickering torches cast dancing shadows on thatched roofs.",
+		Setting:     "High Fantasy",
+		Rules: []string{
+			"Magic flows through all things",
+			"Ancient powers stir",
+			"Honor above all",
+			"Knowledge is power",
+		},
 		CurrentLocation: "Village Edge",
 		Locations:       make(map[string]string),
 	}
@@ -334,10 +353,15 @@ func (e *Engine) createFantasyWorld() *World {
 
 func (e *Engine) createSpaceWorld() *World {
 	return &World{
-		Name:            "Frontier Station Alpha",
-		Description:     "The vast expanse of space stretches endlessly beyond reinforced viewports. This research station orbits a mysterious planet where strange energy readings emanate from the surface. Emergency lights flicker in the corridors as you hear the hum of life support systems working overtime.",
-		Setting:         "Space Opera",
-		Rules:           []string{"The void is unforgiving", "Technology can fail", "First contact protocols exist", "Survival is paramount"},
+		Name:        "Frontier Station Alpha",
+		Description: "The vast expanse of space stretches endlessly beyond reinforced viewports. This research station orbits a mysterious planet where strange energy readings emanate from the surface. Emergency lights flicker in the corridors as you hear the hum of life support systems working overtime.",
+		Setting:     "Space Opera",
+		Rules: []string{
+			"The void is unforgiving",
+			"Technology can fail",
+			"First contact protocols exist",
+			"Survival is paramount",
+		},
 		CurrentLocation: "Station Corridor",
 		Locations:       make(map[string]string),
 	}
@@ -356,10 +380,15 @@ func (e *Engine) createApocalypticWorld() *World {
 
 func (e *Engine) createDefaultWorld() *World {
 	return &World{
-		Name:            "The Unknown",
-		Description:     "You find yourself in a place that defies easy description. Familiar yet strange, ordinary yet filled with hidden possibilities. The air itself seems to whisper of secrets waiting to be discovered and adventures yet to unfold.",
-		Setting:         "Modern Mystery",
-		Rules:           []string{"Nothing is as it seems", "Every choice matters", "Mysteries abound", "Reality is flexible"},
+		Name:        "The Unknown",
+		Description: "You find yourself in a place that defies easy description. Familiar yet strange, ordinary yet filled with hidden possibilities. The air itself seems to whisper of secrets waiting to be discovered and adventures yet to unfold.",
+		Setting:     "Modern Mystery",
+		Rules: []string{
+			"Nothing is as it seems",
+			"Every choice matters",
+			"Mysteries abound",
+			"Reality is flexible",
+		},
 		CurrentLocation: "Starting Point",
 		Locations:       make(map[string]string),
 	}
@@ -410,11 +439,14 @@ func (e *Engine) tryMatchActionType(actionLower string) string {
 }
 
 func (e *Engine) isMovementAction(action string) bool {
-	return strings.Contains(action, "go") || strings.Contains(action, "walk") || strings.Contains(action, "move") || strings.Contains(action, "head")
+	return strings.Contains(action, "go") || strings.Contains(action, "walk") || strings.Contains(action, "move") ||
+		strings.Contains(action, "head")
 }
 
 func (e *Engine) isObservationAction(action string) bool {
-	return strings.Contains(action, "look") || strings.Contains(action, "examine") || strings.Contains(action, "observe") || strings.Contains(action, "inspect")
+	return strings.Contains(action, "look") || strings.Contains(action, "examine") ||
+		strings.Contains(action, "observe") ||
+		strings.Contains(action, "inspect")
 }
 
 func (e *Engine) isSearchAction(action string) bool {
@@ -422,15 +454,19 @@ func (e *Engine) isSearchAction(action string) bool {
 }
 
 func (e *Engine) isCombatAction(action string) bool {
-	return strings.Contains(action, "attack") || strings.Contains(action, "fight") || strings.Contains(action, "strike") || strings.Contains(action, "hit")
+	return strings.Contains(action, "attack") || strings.Contains(action, "fight") ||
+		strings.Contains(action, "strike") ||
+		strings.Contains(action, "hit")
 }
 
 func (e *Engine) isTakingAction(action string) bool {
-	return strings.Contains(action, "take") || strings.Contains(action, "grab") || strings.Contains(action, "pick") || strings.Contains(action, "get")
+	return strings.Contains(action, "take") || strings.Contains(action, "grab") || strings.Contains(action, "pick") ||
+		strings.Contains(action, "get")
 }
 
 func (e *Engine) isCommunicationAction(action string) bool {
-	return strings.Contains(action, "say") || strings.Contains(action, "speak") || strings.Contains(action, "talk") || strings.Contains(action, "tell")
+	return strings.Contains(action, "say") || strings.Contains(action, "speak") || strings.Contains(action, "talk") ||
+		strings.Contains(action, "tell")
 }
 
 func (e *Engine) isOpeningAction(action string) bool {
@@ -438,7 +474,8 @@ func (e *Engine) isOpeningAction(action string) bool {
 }
 
 func (e *Engine) isRestingAction(action string) bool {
-	return strings.Contains(action, "wait") || strings.Contains(action, "rest") || strings.Contains(action, "pause") || strings.Contains(action, "sit")
+	return strings.Contains(action, "wait") || strings.Contains(action, "rest") || strings.Contains(action, "pause") ||
+		strings.Contains(action, "sit")
 }
 
 func (e *Engine) isEscapeAction(action string) bool {

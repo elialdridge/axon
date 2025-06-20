@@ -237,7 +237,7 @@ func TestListSaves(t *testing.T) {
 	}
 
 	// Create a non-save file (should be ignored)
-	if err := os.WriteFile(filepath.Join(tempDir, "not_a_save.txt"), []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tempDir, "not_a_save.txt"), []byte("test"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
