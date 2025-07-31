@@ -1,10 +1,10 @@
 ?   	axon	[no test files]
 ?   	axon/cmd/terminal-info	[no test files]
 ?   	axon/cmd/test	[no test files]
-ok  	axon/internal/ai	0.228s
-ok  	axon/internal/config	0.006s
 ?   	axon/internal/logger	[no test files]
-ok  	axon/internal/game	0.008s
+ok  	axon/internal/ai	0.225s
+ok  	axon/internal/config	0.002s
+ok  	axon/internal/game	0.007s
 ok  	axon/internal/storage	0.004s
-ok  	axon/internal/terminal	0.034s
+ok  	axon/internal/terminal	0.078s
 ok  	axon/internal/ui	0.002s
